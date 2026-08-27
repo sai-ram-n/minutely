@@ -162,8 +162,20 @@ export const outbound = {
   /** @param {string} meetingId */
   momReady: (meetingId) => ({ type: "mom_ready", meetingId }),
 
-  /** @param {string} meetingId @param {string} message */
-  momFailed: (meetingId, message) => ({ type: "mom_failed", meetingId, message }),
+  /**
+   * @param {string} meetingId
+   * @param {string} message
+   * @param {{ retryable?: boolean }} [meta]
+   *   retryable:false means retrying genuinely cannot succeed (e.g. nothing was
+   *   transcribed), so the UI must not offer a retry button that will always
+   *   fail. Defaults to true, since most failures are transient.
+   */
+  momFailed: (meetingId, message, meta = {}) => ({
+    type: "mom_failed",
+    meetingId,
+    message,
+    retryable: meta.retryable !== false,
+  }),
 
   /** @param {string} meetingId @param {object[]} lines */
   resumed: (meetingId, lines) => ({ type: "resumed", meetingId, lines }),

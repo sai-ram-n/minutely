@@ -77,6 +77,19 @@ describe("prompt construction", () => {
     expect(SUMMARY_SYSTEM_PROMPT).toMatch(/Never invent/i);
   });
 
+  it("keeps the literal default values on one line each", () => {
+    // These strings are also the defaults parseMinutes() applies, and a line
+    // break inside one would show the model a value it can never reproduce.
+    expect(SUMMARY_SYSTEM_PROMPT).toContain('"Unassigned"');
+    expect(SUMMARY_SYSTEM_PROMPT).toContain('"Not specified"');
+  });
+
+  it("counts a commitment phrased as an offer as an action item", () => {
+    // Observed miss: "I can run it against staging Thursday morning" was a real
+    // commitment the model did not capture until the prompt said so explicitly.
+    expect(SUMMARY_SYSTEM_PROMPT).toMatch(/phrased as an offer/);
+  });
+
   it("tells the model an action item is not also a decision", () => {
     // The exact failure observed when comparing candidate models.
     expect(SUMMARY_SYSTEM_PROMPT).toMatch(/Never list the\s+same thing in both/);

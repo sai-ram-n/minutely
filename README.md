@@ -11,7 +11,7 @@ time-limited trials.
 
 ## Status
 
-Phase 4 of 10 complete (turn detection). See [Build order](#build-order).
+Phase 5 of 10 complete (summarization). See [Build order](#build-order).
 
 ## Requirements
 
@@ -43,6 +43,7 @@ migrated automatically on first boot.
 | `node scripts/verify-provider.mjs` | Live check against the real Groq API (spends quota, needs network) |
 | `node scripts/verify-socket.mjs` | End-to-end socket check against a running server (spends quota) |
 | `node scripts/verify-turns.mjs` | Turn-detection check against real two-turn audio (spends quota) |
+| `node scripts/verify-minutes.mjs` | Full record → stop → minutes check (spends quota) |
 
 ## Versioning — one file, one edit
 
@@ -88,6 +89,8 @@ Both are enforced at boot.
 | `GET /api/version` | `{ name, version, releaseDate }` from `version.json` |
 | `GET /api/meetings/:id/speakers` | Distinct speaker labels, in first-spoken order |
 | `PATCH /api/meetings/:id/speakers` | Rename a speaker: `{ from, to }` |
+| `GET /api/meetings/:id/minutes` | Generated minutes, if any exist yet |
+| `POST /api/meetings/:id/summarize` | Generate or retry minutes from the stored transcript |
 
 ### WebSocket (`/ws`)
 
@@ -111,6 +114,19 @@ server -> client   { type: "resumed", meetingId, lines }
 
 Every inbound message is validated with zod before any handler touches it, so a
 malformed payload becomes an error reply rather than a crashed server.
+
+### Why a meeting is never stuck in "processing"
+
+Every path through `summarizeMeeting()` leaves a meeting either `done` or
+`failed` — a meeting sitting in `processing` forever is an invisible dead end,
+so it is treated as a bug rather than a state.
+
+Failures also carry whether retrying can actually help. A rate limit or a
+transient provider error is retryable, so the UI offers a retry and
+`POST /api/meetings/:id/summarize` regenerates from the stored transcript at the
+cost of one API call — no re-recording. An **empty transcript is not
+retryable**: nothing was captured, and a retry button there would be a dead end
+dressed up as an action, so the specific reason is shown instead.
 
 ### How turn detection works
 
@@ -211,7 +227,7 @@ now defaults to `openai/gpt-oss-120b`. Override either model with
 2. ✅ `AiProvider` interface + Groq implementation, with retry/backoff and tests
 3. ✅ WebSocket plumbing — mic → chunked upload → live transcript
 4. ✅ Silence-gap turn detection
-5. ⬜ Summarization — prompt + structured JSON parsing
+5. ✅ Summarization — prompt + structured JSON parsing
 6. ⬜ UI for all three screens, with loading/error/empty states
 7. ⬜ PDF/Markdown export, stamped with version and date
 8. ⬜ Deploy — Turso, Render, Cloudflare Pages

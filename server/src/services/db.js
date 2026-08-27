@@ -10,6 +10,7 @@
 
 import { createClient } from "@libsql/client";
 import { resolve } from "node:path";
+import { logger } from "../config/logger.js";
 import { env, SERVER_ROOT, isLocalDatabase } from "../config/env.js";
 
 /**
@@ -293,4 +294,79 @@ export async function listSpeakers(meetingId) {
     args: [meetingId],
   });
   return result.rows.map((row) => String(row.speaker_label));
+}
+
+// ---------------------------------------------------------------------------
+// Minutes
+//
+// The three columns are TEXT, so structured values are stored as JSON and
+// validated on the way back out. Data that has been through a database and an
+// LLM is not trusted on read any more than on write.
+// ---------------------------------------------------------------------------
+
+/**
+ * Inserts or replaces a meeting's minutes.
+ *
+ * @param {string} meetingId
+ * @param {import("../ai/provider.js").MinutesResult} minutes
+ * @param {{ generatedAt?: string }} [options]
+ */
+export async function upsertMinutes(meetingId, minutes, options = {}) {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+
+  await getClient().execute({
+    sql: `INSERT INTO minutes (meeting_id, decisions, action_items, open_questions, generated_at)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(meeting_id) DO UPDATE SET
+            decisions      = excluded.decisions,
+            action_items   = excluded.action_items,
+            open_questions = excluded.open_questions,
+            generated_at   = excluded.generated_at`,
+    args: [
+      meetingId,
+      JSON.stringify(minutes.decisions),
+      JSON.stringify(minutes.action_items),
+      JSON.stringify(minutes.open_questions),
+      generatedAt,
+    ],
+  });
+
+  return { ...minutes, generated_at: generatedAt };
+}
+
+/**
+ * Parses a JSON column, falling back to an empty array rather than throwing.
+ * A single corrupt row should degrade one section of the UI, not break the page.
+ * @param {unknown} value
+ * @param {string} label
+ */
+function parseJsonColumn(value, label) {
+  try {
+    const parsed = JSON.parse(String(value ?? "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    logger.warn({ column: label }, "minutes column was not valid JSON — treating as empty");
+    return [];
+  }
+}
+
+/**
+ * @param {string} meetingId
+ * @returns {Promise<(import("../ai/provider.js").MinutesResult & { generated_at: string }) | null>}
+ */
+export async function getMinutes(meetingId) {
+  const result = await getClient().execute({
+    sql: "SELECT * FROM minutes WHERE meeting_id = ?",
+    args: [meetingId],
+  });
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  return {
+    decisions: parseJsonColumn(row.decisions, "decisions"),
+    action_items: parseJsonColumn(row.action_items, "action_items"),
+    open_questions: parseJsonColumn(row.open_questions, "open_questions"),
+    generated_at: String(row.generated_at),
+  };
 }

@@ -8,7 +8,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { logger } from "../config/logger.js";
-import { getMeeting, listSpeakers, renameSpeaker } from "../services/db.js";
+import { getMeeting, getMinutes, listSpeakers, renameSpeaker } from "../services/db.js";
+import { summarizeMeeting } from "../services/summarize.js";
+import { getProvider } from "../ai/index.js";
 
 const meetingIdSchema = z.string().uuid();
 
@@ -19,8 +21,13 @@ const renameSchema = z.object({
   to: z.string().trim().min(1, "to is required").max(60),
 });
 
-export function createMeetingsRouter() {
+/**
+ * @param {Object} [options]
+ * @param {import("../ai/provider.js").AiProvider} [options.provider] Injected by tests.
+ */
+export function createMeetingsRouter(options = {}) {
   const router = Router();
+  const resolveProvider = () => options.provider ?? getProvider();
 
   /** Rejects a non-UUID id before it reaches a query. */
   function parseMeetingId(req, res) {
@@ -91,6 +98,82 @@ export function createMeetingsRouter() {
 
       logger.info({ meetingId: id, from, to, updated }, "speaker renamed");
       res.json({ updated, speakers: await listSpeakers(id) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * Retry summarization.
+   *
+   * The spec requires a failed meeting to surface a retry affordance rather
+   * than becoming an invisible dead end. The transcript is already stored, so
+   * a retry costs one summarization call and no re-recording.
+   */
+  router.post("/:id/summarize", async (req, res, next) => {
+    try {
+      const id = parseMeetingId(req, res);
+      if (!id) return;
+
+      const meeting = await getMeeting(id);
+      if (!meeting) {
+        res.status(404).json({ error: "Meeting not found" });
+        return;
+      }
+
+      if (meeting.status === "recording") {
+        res.status(409).json({
+          error: "This meeting is still recording. Stop it before generating minutes.",
+        });
+        return;
+      }
+
+      const minutes = await summarizeMeeting(id, { provider: resolveProvider() });
+      res.json({ status: "done", minutes });
+    } catch (err) {
+      // Expected failure modes get a readable message and the right status;
+      // anything else falls through to the generic handler.
+      if (err?.name === "EmptyTranscriptError") {
+        res.status(422).json({ error: err.message, retryable: false });
+        return;
+      }
+      if (err?.status === 429) {
+        res.status(429).json({
+          error: "The AI service is rate limited right now. Try again in a moment.",
+          retryable: true,
+        });
+        return;
+      }
+      if (err?.name === "HttpError" || /Summarization returned/.test(err?.message ?? "")) {
+        res.status(502).json({
+          error: "Could not generate minutes. You can try again.",
+          retryable: true,
+        });
+        return;
+      }
+      next(err);
+    }
+  });
+
+  /** The generated minutes for a meeting, if any exist yet. */
+  router.get("/:id/minutes", async (req, res, next) => {
+    try {
+      const id = parseMeetingId(req, res);
+      if (!id) return;
+
+      const meeting = await getMeeting(id);
+      if (!meeting) {
+        res.status(404).json({ error: "Meeting not found" });
+        return;
+      }
+
+      const minutes = await getMinutes(id);
+      if (!minutes) {
+        res.status(404).json({ error: "No minutes have been generated for this meeting yet" });
+        return;
+      }
+
+      res.json({ status: meeting.status, minutes });
     } catch (err) {
       next(err);
     }

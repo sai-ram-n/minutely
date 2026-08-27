@@ -426,6 +426,48 @@ describe("stop_recording", () => {
     await client.close();
   });
 
+  it("marks a failure retryable by default", async () => {
+    await server.close();
+    server = await startTestServer({
+      provider,
+      onFinalize: async () => {
+        throw new Error("transient upstream failure");
+      },
+    });
+
+    const { client, meetingId } = await startRecording();
+    client.send({ type: "stop_recording", meetingId });
+
+    const failed = await client.waitFor("mom_failed");
+    expect(failed.retryable).toBe(true);
+    expect(failed.message).toMatch(/retry/i);
+
+    await client.close();
+  });
+
+  it("does NOT offer a retry when retrying cannot possibly succeed", async () => {
+    // An empty transcript is the clear case: a retry button here would be a
+    // dead end dressed up as an action.
+    await server.close();
+    server = await startTestServer({
+      provider,
+      onFinalize: async () => {
+        const err = new Error("No speech was transcribed, so there is nothing to summarize.");
+        err.retryable = false;
+        throw err;
+      },
+    });
+
+    const { client, meetingId } = await startRecording();
+    client.send({ type: "stop_recording", meetingId });
+
+    const failed = await client.waitFor("mom_failed");
+    expect(failed.retryable).toBe(false);
+    expect(failed.message).toMatch(/nothing to summarize/);
+
+    await client.close();
+  });
+
   it("reports mom_ready when summarization succeeds", async () => {
     await server.close();
     server = await startTestServer({ provider, onFinalize: async () => {} });

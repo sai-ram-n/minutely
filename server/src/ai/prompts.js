@@ -28,9 +28,14 @@ Rules:
 - decisions: concrete choices the group settled on. Something the group agreed to
   DO, assigned to a person, is an action item, not a decision. Never list the
   same thing in both.
-- action_items: tasks someone committed to. "owner" is the person's name exactly
-  as it appears in the transcript, or "Unassigned" if nobody took it. "due" is
-  the deadline as stated, or "Not specified". Never invent an owner or a date.
+- action_items: tasks someone committed to. A commitment counts even when it is
+  phrased as an offer, an ability, or readiness rather than a promise — "I can
+  run it Thursday", "I've got the script ready", "happy to take that" are all
+  action items. If a person indicated they will do something, capture it.
+  "owner" is the person's name exactly as it appears in the transcript,
+  or "Unassigned" if nobody took it.
+  "due" is the deadline as stated, or "Not specified".
+  Never invent an owner or a date.
 - open_questions: questions raised that were not resolved during the meeting.
 - Use only what is in the transcript. Do not infer, embellish, or add plausible
   items that were never said.

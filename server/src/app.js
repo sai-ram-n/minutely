@@ -29,7 +29,12 @@ export function allowedOrigins() {
   return origins;
 }
 
-export function createApp() {
+/**
+ * @param {Object} [options]
+ * @param {import("./ai/provider.js").AiProvider} [options.provider]
+ *   Injected by tests so routes can be exercised without the real API.
+ */
+export function createApp(options = {}) {
   const app = express();
   const allowed = allowedOrigins();
 
@@ -70,7 +75,7 @@ export function createApp() {
   });
 
   app.use("/api", apiLimiter, createSystemRouter());
-  app.use("/api/meetings", apiLimiter, createMeetingsRouter());
+  app.use("/api/meetings", apiLimiter, createMeetingsRouter({ provider: options.provider }));
 
   app.use((req, res) => {
     res.status(404).json({ error: `Not found: ${req.method} ${req.originalUrl}` });

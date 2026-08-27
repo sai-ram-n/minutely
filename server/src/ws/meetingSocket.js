@@ -307,11 +307,20 @@ async function handleStop({ socket, message, log, options }) {
   } catch (err) {
     log.error({ err: err.message, meetingId: message.meetingId }, "summarization failed");
     await updateMeetingStatus(message.meetingId, "failed");
+
+    // Some failures cannot be retried into success — an empty transcript is the
+    // clear case. Telling the user to retry that would be a dead end dressed up
+    // as an action, so the specific reason is surfaced instead.
+    const retryable = err?.retryable !== false;
+
     send(
       socket,
       outbound.momFailed(
         message.meetingId,
-        "Could not generate minutes. You can retry from the meeting page.",
+        retryable
+          ? "Could not generate minutes. You can retry from the meeting page."
+          : err.message,
+        { retryable },
       ),
     );
   }

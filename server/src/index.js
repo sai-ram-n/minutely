@@ -14,6 +14,7 @@ import { closeClient, describeTarget } from "./services/db.js";
 import { readVersion } from "./config/env.js";
 import { getProvider } from "./ai/index.js";
 import { attachMeetingSocket } from "./ws/meetingSocket.js";
+import { summarizeMeeting } from "./services/summarize.js";
 
 const version = readVersion();
 
@@ -51,7 +52,12 @@ async function main() {
     );
   });
 
-  attachMeetingSocket(server);
+  attachMeetingSocket(server, {
+    // Wired here rather than inside the socket module so the socket has no
+    // opinion about what "finalizing" means and stays testable without it.
+    onFinalize: (meetingId) =>
+      summarizeMeeting(meetingId, { provider: getProvider() }),
+  });
 
   server.on("error", (err) => {
     logger.fatal({ err: err.message }, "server failed to bind");
