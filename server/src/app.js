@@ -34,8 +34,43 @@ export function isOriginAllowed(origin) {
   if (!origin) return true;
   if (origin === env.FRONTEND_ORIGIN) return true;
 
-  if (env.NODE_ENV !== "production") {
-    return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  if (env.NODE_ENV !== "production") return isLocalDevOrigin(origin);
+
+  return false;
+}
+
+/**
+ * Whether an origin is a local development address.
+ *
+ * Covers localhost and private (RFC1918) LAN addresses, so the dev server can
+ * be reached from a phone or another machine on the same network without
+ * every request failing CORS. Deliberately excludes anything routable from the
+ * public internet, and is never consulted in production.
+ *
+ * @param {string} origin
+ * @returns {boolean}
+ */
+export function isLocalDevOrigin(origin) {
+  let host;
+  try {
+    ({ hostname: host } = new URL(origin));
+  } catch {
+    return false;
+  }
+
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]") {
+    return true;
+  }
+
+  // 10.0.0.0/8
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  // 192.168.0.0/16
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  // 172.16.0.0/12 — note 172.16 through 172.31 only, not 172.32+
+  const match = /^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(host);
+  if (match) {
+    const second = Number(match[1]);
+    return second >= 16 && second <= 31;
   }
 
   return false;

@@ -46,6 +46,11 @@ export default defineConfig({
     // when the IPv4 port is already taken — producing two dev servers on "the
     // same" port that resolve differently depending on the client. Painful to
     // debug, and this box already has another project on 5173.
+    //
+    // CLIENT_HOST=0.0.0.0 (npm run dev:host) exposes it on the network. Note
+    // that the microphone will NOT work over plain http from another machine:
+    // getUserMedia requires a secure context, so only localhost or https will
+    // do. The sample recording still works, since it needs no microphone.
     host: process.env.CLIENT_HOST ?? "127.0.0.1",
     port: Number(process.env.CLIENT_PORT ?? 5173),
     // Dev-only convenience: the client talks to the API and socket on the same

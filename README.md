@@ -38,22 +38,47 @@ No cloud setup is needed: the database is a local SQLite file
 (`server/local.db`), created and migrated automatically on first boot. The only
 thing you must provide is `GROQ_API_KEY`.
 
+### Reaching it from another machine
+
+```bash
+npm run dev:host
+```
+
+Binds both halves to all interfaces and prints the network URL. In development
+the API also accepts private (RFC1918) LAN origins, so CORS and the WebSocket
+work from another machine without extra configuration. Public addresses are
+still rejected, and none of this relaxation applies in production.
+
+**But the microphone will not work that way** — see below. The *sample meeting*
+does, since it needs no microphone.
+
 ### The microphone needs a secure context
 
 `getUserMedia` only works on **HTTPS or localhost**. Browsing to
 `http://<some-ip>:5173` — a remote dev box, another machine on your LAN — means
 the browser blocks the microphone outright and recording silently never starts.
 
-If the code runs somewhere other than the machine with the microphone, forward
-the port instead of exposing it:
+This is a browser rule, not something the app can opt out of. There are two
+ways round it:
+
+**Forward the port** (simplest, and the microphone works):
 
 ```bash
-ssh -L 5173:127.0.0.1:5173 you@your-dev-box
+ssh -L 5174:127.0.0.1:5174 you@your-dev-box
 ```
 
-Then open `http://localhost:5173` locally: that *is* a secure context, so the
-microphone works. Only the client port needs forwarding — API and WebSocket
-traffic is proxied through it.
+Then open `http://localhost:5174` locally — that *is* a secure context. Only the
+client port needs forwarding; API and WebSocket traffic proxies through it.
+
+**Or serve over HTTPS**, if you genuinely need LAN access with a working
+microphone. Vite can do this with a self-signed certificate:
+
+```bash
+npm i -D -w client @vitejs/plugin-basic-ssl
+```
+
+then add the plugin to `client/vite.config.js` and run `npm run dev:host`. You
+will have to accept the browser's certificate warning once on each device.
 
 ### Try it without a microphone
 
@@ -79,6 +104,7 @@ chunking working as designed, not a hang — the UI says so while you wait.
 | Command | What it does |
 |---|---|
 | `npm run dev:all` | Start the API **and** the client together (what you usually want) |
+| `npm run dev:host` | Same, but reachable from other machines on your network |
 | `npm run dev` | Sync version, then start just the server with file watching |
 | `npm test` | Run all tests across client and server |
 | `npm run lint` | Lint everything |

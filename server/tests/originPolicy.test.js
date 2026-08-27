@@ -65,6 +65,42 @@ describe("development", () => {
   });
 });
 
+describe("development — LAN access", () => {
+  const devEnv = { NODE_ENV: "development", FRONTEND_ORIGIN: "http://localhost:5173" };
+
+  it("allows private LAN addresses, so the dev server is reachable from another machine", async () => {
+    const { isOriginAllowed } = await loadWithEnv(devEnv);
+
+    expect(isOriginAllowed("http://192.168.21.112:5174")).toBe(true);
+    expect(isOriginAllowed("http://10.1.2.3:5173")).toBe(true);
+    expect(isOriginAllowed("http://172.20.0.1:5173")).toBe(true);
+  });
+
+  it("rejects public addresses even in development", async () => {
+    const { isOriginAllowed } = await loadWithEnv(devEnv);
+
+    expect(isOriginAllowed("http://8.8.8.8:5173")).toBe(false);
+    expect(isOriginAllowed("https://evil.example")).toBe(false);
+  });
+
+  it("respects the edges of the 172.16/12 private range", async () => {
+    const { isOriginAllowed } = await loadWithEnv(devEnv);
+
+    // 172.16-172.31 are private; 172.15 and 172.32 are not.
+    expect(isOriginAllowed("http://172.16.0.1:5173")).toBe(true);
+    expect(isOriginAllowed("http://172.31.255.254:5173")).toBe(true);
+    expect(isOriginAllowed("http://172.15.0.1:5173")).toBe(false);
+    expect(isOriginAllowed("http://172.32.0.1:5173")).toBe(false);
+  });
+
+  it("is not fooled by a public host that merely starts with a private prefix", async () => {
+    const { isOriginAllowed } = await loadWithEnv(devEnv);
+
+    expect(isOriginAllowed("http://192.168.21.112.evil.example")).toBe(false);
+    expect(isOriginAllowed("http://10.1.2.3.attacker.test")).toBe(false);
+  });
+});
+
 describe("production", () => {
   const prodEnv = {
     NODE_ENV: "production",
@@ -83,6 +119,13 @@ describe("production", () => {
 
     expect(isOriginAllowed("http://localhost:5173")).toBe(false);
     expect(isOriginAllowed("http://127.0.0.1:5174")).toBe(false);
+  });
+
+  it("rejects private LAN addresses in production too", async () => {
+    const { isOriginAllowed } = await loadWithEnv(prodEnv);
+
+    expect(isOriginAllowed("http://192.168.21.112:5174")).toBe(false);
+    expect(isOriginAllowed("http://10.1.2.3:5173")).toBe(false);
   });
 
   it("rejects a different origin, including a near-miss on the same host", async () => {
