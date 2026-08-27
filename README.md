@@ -11,7 +11,7 @@ time-limited trials.
 
 ## Status
 
-Phase 2 of 10 complete (AI provider). See [Build order](#build-order).
+Phase 3 of 10 complete (WebSocket plumbing). See [Build order](#build-order).
 
 ## Requirements
 
@@ -41,6 +41,7 @@ migrated automatically on first boot.
 | `npm run sync-version` | Propagate `version.json` everywhere it is used |
 | `npm run migrate` | Apply database migrations (idempotent) |
 | `node scripts/verify-provider.mjs` | Live check against the real Groq API (spends quota, needs network) |
+| `node scripts/verify-socket.mjs` | End-to-end socket check against a running server (spends quota) |
 
 ## Versioning — one file, one edit
 
@@ -84,6 +85,41 @@ Both are enforced at boot.
 |---|---|
 | `GET /api/health` | Liveness **and** database reachability. Exempt from rate limiting — use it to wake a sleeping host. |
 | `GET /api/version` | `{ name, version, releaseDate }` from `version.json` |
+
+### WebSocket (`/ws`)
+
+```
+client -> server   { type: "start_recording", title }
+server -> client   { type: "recording_started", meetingId }
+
+client -> server   { type: "audio_chunk", meetingId, data: <base64>, sequence }
+server -> client   { type: "transcript_line", speakerLabel, text, timestamp, sequence }
+server -> client   { type: "transcription_error", message, sequence, retryable }
+
+client -> server   { type: "stop_recording", meetingId }
+server -> client   { type: "recording_stopped", meetingId }
+server -> client   { type: "processing" }
+server -> client   { type: "mom_ready", meetingId }
+server -> client   { type: "mom_failed", meetingId, message }
+
+client -> server   { type: "resume_recording", meetingId, lastSequence }
+server -> client   { type: "resumed", meetingId, lines }
+```
+
+Every inbound message is validated with zod before any handler touches it, so a
+malformed payload becomes an error reply rather than a crashed server.
+
+### Why recording is chunked the way it is
+
+`MediaRecorder.start(timeslice)` only puts the container header on the **first**
+blob, so later blobs are not independently decodable — a naive implementation
+transcribes chunk 1 and then fails on every chunk after it.
+
+Instead each chunk is its own complete recording: the recorder is stopped and a
+fresh one started every ~20s. To avoid slicing a word in half at the boundary,
+the next recorder starts ~1s *before* the current one stops, so two recorders
+briefly overlap. The duplicated words that produces are trimmed server-side by
+`dedupeOverlap()`.
 
 ## Architecture
 
@@ -154,7 +190,7 @@ now defaults to `openai/gpt-oss-120b`. Override either model with
 
 1. ✅ Server skeleton — env validation, `/api/health`, Turso connection, migrations
 2. ✅ `AiProvider` interface + Groq implementation, with retry/backoff and tests
-3. ⬜ WebSocket plumbing — mic → chunked upload → live transcript
+3. ✅ WebSocket plumbing — mic → chunked upload → live transcript
 4. ⬜ Silence-gap turn detection
 5. ⬜ Summarization — prompt + structured JSON parsing
 6. ⬜ UI for all three screens, with loading/error/empty states

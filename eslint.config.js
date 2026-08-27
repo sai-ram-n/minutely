@@ -48,7 +48,14 @@ const browserGlobals = {
   clearInterval: "readonly",
   localStorage: "readonly",
   URL: "readonly",
+  btoa: "readonly",
+  atob: "readonly",
+  Uint8Array: "readonly",
+  MediaStream: "readonly",
+  FormData: "readonly",
 };
+
+import react from "eslint-plugin-react";
 
 export default [
   {
@@ -88,9 +95,21 @@ export default [
   {
     files: ["client/**/*.js", "client/**/*.jsx"],
     languageOptions: { globals: browserGlobals },
+    plugins: { react },
+    rules: {
+      // Without these, ESLint cannot see that JSX references a binding and
+      // reports every imported component as unused.
+      "react/jsx-uses-react": "error",
+      "react/jsx-uses-vars": "error",
+    },
   },
   {
-    files: ["server/tests/**/*.js"],
+    files: ["server/tests/**/*.js", "client/src/**/*.test.{js,jsx}"],
     languageOptions: { globals: { ...nodeGlobals } },
+    rules: {
+      // Reassigning shared fixtures between async hooks is normal in tests and
+      // not the race this rule is designed to catch.
+      "require-atomic-updates": "off",
+    },
   },
 ];

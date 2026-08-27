@@ -23,6 +23,7 @@
     "migrate": "npm run migrate --workspace server"
   },
   "devDependencies": {
-    "eslint": "^9.15.0"
+    "eslint": "^9.15.0",
+    "eslint-plugin-react": "^7.37.5"
   }
 }

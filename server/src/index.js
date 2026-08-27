@@ -13,6 +13,7 @@ import { migrate } from "./services/migrate.js";
 import { closeClient, describeTarget } from "./services/db.js";
 import { readVersion } from "./config/env.js";
 import { getProvider } from "./ai/index.js";
+import { attachMeetingSocket } from "./ws/meetingSocket.js";
 
 const version = readVersion();
 
@@ -49,6 +50,8 @@ async function main() {
       `listening on http://localhost:${env.PORT}`,
     );
   });
+
+  attachMeetingSocket(server);
 
   server.on("error", (err) => {
     logger.fatal({ err: err.message }, "server failed to bind");
