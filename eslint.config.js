@@ -1,0 +1,90 @@
+/**
+ * Flat ESLint config (ESLint 9).
+ *
+ * Deliberately lean: correctness rules that catch real mistakes, not style
+ * opinions. Formatting is not enforced here.
+ */
+
+const nodeGlobals = {
+  process: "readonly",
+  console: "readonly",
+  Buffer: "readonly",
+  URL: "readonly",
+  URLSearchParams: "readonly",
+  TextEncoder: "readonly",
+  TextDecoder: "readonly",
+  setTimeout: "readonly",
+  clearTimeout: "readonly",
+  setInterval: "readonly",
+  clearInterval: "readonly",
+  setImmediate: "readonly",
+  fetch: "readonly",
+  AbortController: "readonly",
+  AbortSignal: "readonly",
+  structuredClone: "readonly",
+  __dirname: "readonly",
+};
+
+const browserGlobals = {
+  window: "readonly",
+  document: "readonly",
+  navigator: "readonly",
+  console: "readonly",
+  fetch: "readonly",
+  WebSocket: "readonly",
+  MediaRecorder: "readonly",
+  Blob: "readonly",
+  FileReader: "readonly",
+  AudioContext: "readonly",
+  setTimeout: "readonly",
+  clearTimeout: "readonly",
+  setInterval: "readonly",
+  clearInterval: "readonly",
+  localStorage: "readonly",
+  URL: "readonly",
+};
+
+export default [
+  {
+    ignores: [
+      "node_modules/**",
+      "**/node_modules/**",
+      "dist/**",
+      "**/dist/**",
+      "coverage/**",
+      "client/src/version.json",
+    ],
+  },
+  {
+    files: ["**/*.js", "**/*.mjs", "**/*.jsx"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "no-undef": "error",
+      "no-console": "off",
+      eqeqeq: ["error", "smart"],
+      "no-var": "error",
+      "prefer-const": "error",
+      "no-throw-literal": "error",
+      // An unhandled async rejection in a route handler is a silent 500.
+      "no-async-promise-executor": "error",
+      "require-atomic-updates": "warn",
+    },
+  },
+  {
+    files: ["server/**/*.js", "scripts/**/*.mjs"],
+    languageOptions: { globals: nodeGlobals },
+  },
+  {
+    files: ["client/**/*.js", "client/**/*.jsx"],
+    languageOptions: { globals: browserGlobals },
+  },
+  {
+    files: ["server/tests/**/*.js"],
+    languageOptions: { globals: { ...nodeGlobals } },
+  },
+];

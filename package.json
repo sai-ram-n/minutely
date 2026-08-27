@@ -1,0 +1,28 @@
+{
+  "name": "minutely",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Meeting minutes AI — live transcription and structured minutes of meeting",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "sync-version": "node scripts/sync-version.mjs",
+    "predev": "npm run sync-version",
+    "dev": "npm run dev --workspace server",
+    "prebuild": "npm run sync-version",
+    "build": "npm run build --workspace client",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint .",
+    "migrate": "npm run migrate --workspace server"
+  },
+  "devDependencies": {
+    "eslint": "^9.15.0"
+  }
+}

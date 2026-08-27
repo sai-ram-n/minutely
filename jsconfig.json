@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "strict": false,
+    "jsx": "preserve",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["client/src/**/*", "server/src/**/*", "server/tests/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "dist", "build"]
+}
