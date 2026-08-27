@@ -11,7 +11,7 @@ time-limited trials.
 
 ## Status
 
-Phase 5 of 10 complete (summarization). See [Build order](#build-order).
+Phase 6 of 10 complete (UI). See [Build order](#build-order).
 
 ## Requirements
 
@@ -89,6 +89,8 @@ Both are enforced at boot.
 | `GET /api/version` | `{ name, version, releaseDate }` from `version.json` |
 | `GET /api/meetings/:id/speakers` | Distinct speaker labels, in first-spoken order |
 | `PATCH /api/meetings/:id/speakers` | Rename a speaker: `{ from, to }` |
+| `GET /api/meetings` | Meeting history, newest first |
+| `GET /api/meetings/:id` | One meeting with its transcript and minutes |
 | `GET /api/meetings/:id/minutes` | Generated minutes, if any exist yet |
 | `POST /api/meetings/:id/summarize` | Generate or retry minutes from the stored transcript |
 
@@ -114,6 +116,24 @@ server -> client   { type: "resumed", meetingId, lines }
 
 Every inbound message is validated with zod before any handler touches it, so a
 malformed payload becomes an error reply rather than a crashed server.
+
+### UI states
+
+Every async surface renders three states explicitly — loading, error with a
+retry affordance, and a real empty state. There is no path that shows blank
+space or an indefinite spinner. An `ErrorBoundary` wraps each screen and is
+keyed by route, so a crash in one screen cannot strand another, and the page
+never goes white.
+
+Routing is hash-based, so the browser back button works and a meeting URL can
+be shared without adding a router dependency.
+
+### CORS in development
+
+Production accepts exactly `FRONTEND_ORIGIN` and nothing else. Development also
+accepts any `localhost` port, because Vite silently picks a different port when
+its default is taken — pinning the allowlist to one port turns that into a
+WebSocket handshake 403 with no obvious cause.
 
 ### Why a meeting is never stuck in "processing"
 
@@ -228,7 +248,7 @@ now defaults to `openai/gpt-oss-120b`. Override either model with
 3. ✅ WebSocket plumbing — mic → chunked upload → live transcript
 4. ✅ Silence-gap turn detection
 5. ✅ Summarization — prompt + structured JSON parsing
-6. ⬜ UI for all three screens, with loading/error/empty states
+6. ✅ UI for all three screens, with loading/error/empty states
 7. ⬜ PDF/Markdown export, stamped with version and date
 8. ⬜ Deploy — Turso, Render, Cloudflare Pages
 9. ⬜ CI — lint and test on push

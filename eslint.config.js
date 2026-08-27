@@ -50,12 +50,17 @@ const browserGlobals = {
   URL: "readonly",
   btoa: "readonly",
   atob: "readonly",
+  Element: "readonly",
+  HTMLElement: "readonly",
+  Node: "readonly",
+  MediaRecorder: "readonly",
   Uint8Array: "readonly",
   MediaStream: "readonly",
   FormData: "readonly",
 };
 
 import react from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
   {
@@ -95,17 +100,24 @@ export default [
   {
     files: ["client/**/*.js", "client/**/*.jsx"],
     languageOptions: { globals: browserGlobals },
-    plugins: { react },
+    plugins: { react, "react-hooks": reactHooks },
     rules: {
       // Without these, ESLint cannot see that JSX references a binding and
       // reports every imported component as unused.
       "react/jsx-uses-react": "error",
       "react/jsx-uses-vars": "error",
+      // Hook misuse is a real source of stale-state bugs, not a style matter.
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
   {
-    files: ["server/tests/**/*.js", "client/src/**/*.test.{js,jsx}"],
-    languageOptions: { globals: { ...nodeGlobals } },
+    files: [
+      "server/tests/**/*.js",
+      "client/src/**/*.test.{js,jsx}",
+      "client/src/test/**/*.js",
+    ],
+    languageOptions: { globals: { ...nodeGlobals, ...browserGlobals } },
     rules: {
       // Reassigning shared fixtures between async hooks is normal in tests and
       // not the race this rule is designed to catch.

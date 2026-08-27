@@ -8,7 +8,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { logger } from "../config/logger.js";
-import { getMeeting, getMinutes, listSpeakers, renameSpeaker } from "../services/db.js";
+import {
+  getMeeting,
+  getMinutes,
+  getTranscriptLines,
+  listMeetings,
+  listSpeakers,
+  renameSpeaker,
+} from "../services/db.js";
 import { summarizeMeeting } from "../services/summarize.js";
 import { getProvider } from "../ai/index.js";
 
@@ -38,6 +45,62 @@ export function createMeetingsRouter(options = {}) {
     }
     return result.data;
   }
+
+  /** Meeting history, newest first. */
+  router.get("/", async (_req, res, next) => {
+    try {
+      const meetings = await listMeetings();
+      res.json({
+        meetings: meetings.map((meeting) => ({
+          id: meeting.id,
+          title: meeting.title,
+          startedAt: meeting.started_at,
+          endedAt: meeting.ended_at,
+          status: meeting.status,
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /** One meeting with its transcript and minutes, for the detail screen. */
+  router.get("/:id", async (req, res, next) => {
+    try {
+      const id = parseMeetingId(req, res);
+      if (!id) return;
+
+      const meeting = await getMeeting(id);
+      if (!meeting) {
+        res.status(404).json({ error: "Meeting not found" });
+        return;
+      }
+
+      const [lines, minutes] = await Promise.all([
+        getTranscriptLines(id),
+        getMinutes(id),
+      ]);
+
+      res.json({
+        meeting: {
+          id: meeting.id,
+          title: meeting.title,
+          startedAt: meeting.started_at,
+          endedAt: meeting.ended_at,
+          status: meeting.status,
+        },
+        transcript: lines.map((line) => ({
+          speakerLabel: line.speaker_label,
+          text: line.text,
+          timestamp: line.timestamp,
+          sequence: line.sequence,
+        })),
+        minutes,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.get("/:id/speakers", async (req, res, next) => {
     try {

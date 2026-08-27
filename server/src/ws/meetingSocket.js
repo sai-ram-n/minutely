@@ -13,7 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { logger } from "../config/logger.js";
-import { allowedOrigins } from "../app.js";
+import { isOriginAllowed } from "../app.js";
 import { getProvider } from "../ai/index.js";
 import {
   parseClientMessage,
@@ -92,7 +92,6 @@ function send(socket, payload) {
  */
 export function attachMeetingSocket(server, options = {}) {
   const provider = options.provider ?? getProvider();
-  const allowed = allowedOrigins();
   const limiter = createUpgradeLimiter();
 
   const wss = new WebSocketServer({
@@ -112,7 +111,7 @@ export function attachMeetingSocket(server, options = {}) {
 
       // A browser always sends Origin. Its absence means a non-browser client,
       // which is allowed for local tooling but never carries ambient credentials.
-      if (origin && !allowed.has(origin)) {
+      if (!isOriginAllowed(origin)) {
         logger.warn({ origin, ip }, "WebSocket upgrade rejected — disallowed origin");
         return callback(false, 403, "Origin not allowed");
       }

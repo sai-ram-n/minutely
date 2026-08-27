@@ -1,146 +1,108 @@
 /**
- * Phase 3: a deliberately bare page.
+ * Application shell: navigation, the three screens, and the footer.
  *
- * Its only job is to prove the pipeline end to end — microphone in, transcript
- * lines back. The real three-screen UI, with proper loading/error/empty states,
- * is Phase 6. Styling here is intentionally minimal and inline.
+ * Routing is hash-based so the browser back button works and a meeting URL can
+ * be shared — worth having, and cheaper than a router dependency.
  */
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
+import { RecordingScreen } from "./components/RecordingScreen.jsx";
+import { MinutesView } from "./components/MinutesView.jsx";
+import { MeetingHistory } from "./components/MeetingHistory.jsx";
 import { useMeetingSocket } from "./hooks/useMeetingSocket.js";
-import versionInfo from "./version.json";
+import { useVersionCheck } from "./hooks/useVersionCheck.js";
+import "./styles.css";
 
-const styles = {
-  page: {
-    fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif",
-    maxWidth: "44rem",
-    margin: "0 auto",
-    padding: "2rem 1.25rem 4rem",
-    lineHeight: 1.5,
-  },
-  row: { display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" },
-  input: { flex: "1 1 16rem", padding: "0.5rem", fontSize: "1rem" },
-  button: { padding: "0.5rem 1rem", fontSize: "1rem", cursor: "pointer" },
-  line: { padding: "0.5rem 0", borderBottom: "1px solid #e5e5e5" },
-  speaker: { fontWeight: 600, marginRight: "0.5rem" },
-  banner: { padding: "0.75rem", borderRadius: "4px", margin: "0.75rem 0" },
-  footer: { marginTop: "3rem", fontSize: "0.8rem", color: "#666" },
-};
+/** @returns {{ screen: "record" | "history" | "minutes", meetingId?: string }} */
+function parseHash() {
+  const hash = globalThis.location?.hash?.replace(/^#\/?/, "") ?? "";
+  const [screen, id] = hash.split("/");
 
-const CONNECTION_LABEL = {
-  idle: "Not connected",
-  connecting: "Connecting…",
-  open: "Connected",
-  reconnecting: "Reconnecting…",
-  closed: "Disconnected",
-};
+  if (screen === "meetings" && id) return { screen: "minutes", meetingId: id };
+  if (screen === "meetings") return { screen: "history" };
+  return { screen: "record" };
+}
 
 export default function App() {
-  const [title, setTitle] = useState("");
-  const {
-    connectionState,
-    meetingStatus,
-    meetingId,
-    lines,
-    notices,
-    error,
-    start,
-    stop,
-    dismissError,
-  } = useMeetingSocket();
+  const [route, setRoute] = useState(parseHash);
+  const session = useMeetingSocket();
+  const { local, mismatch } = useVersionCheck();
 
-  const isRecording = meetingStatus === "recording";
-  const isBusy = meetingStatus === "starting" || meetingStatus === "stopping";
+  useEffect(() => {
+    const onHashChange = () => setRoute(parseHash());
+    globalThis.addEventListener("hashchange", onHashChange);
+    return () => globalThis.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  const navigate = useCallback((hash) => {
+    globalThis.location.hash = hash;
+  }, []);
+
+  const openMeeting = useCallback((id) => navigate(`#/meetings/${id}`), [navigate]);
 
   return (
-    <main style={styles.page}>
-      <h1>Minutely</h1>
-      <p style={{ color: "#666", marginTop: "-0.5rem" }}>
-        Phase 4 — turn detection. Bare page; the real UI comes in Phase 6.
-      </p>
-
-      <p>
-        <strong>Connection:</strong> {CONNECTION_LABEL[connectionState] ?? connectionState}
-        {meetingId ? ` · meeting ${meetingId.slice(0, 8)}…` : ""}
-      </p>
-
-      {error && (
-        <div style={{ ...styles.banner, background: "#fdecea", border: "1px solid #f5c2c0" }}>
-          <strong>Error:</strong> {error}{" "}
-          <button type="button" onClick={dismissError} style={{ marginLeft: "0.5rem" }}>
-            Dismiss
-          </button>
+    <div className="app">
+      <header className="header">
+        <div className="header__inner">
+          <div className="header__brand">
+            <span className="header__dot" aria-hidden="true" />
+            Minutely
+          </div>
+          <nav className="nav" aria-label="Main">
+            <button
+              type="button"
+              className={`nav__item ${route.screen === "record" ? "nav__item--active" : ""}`}
+              aria-current={route.screen === "record" ? "page" : undefined}
+              onClick={() => navigate("#/")}
+            >
+              Record
+            </button>
+            <button
+              type="button"
+              className={`nav__item ${route.screen !== "record" ? "nav__item--active" : ""}`}
+              aria-current={route.screen !== "record" ? "page" : undefined}
+              onClick={() => navigate("#/meetings")}
+            >
+              Meetings
+            </button>
+          </nav>
         </div>
-      )}
+      </header>
 
-      {notices.map((notice) => (
-        <div
-          key={notice.id}
-          style={{ ...styles.banner, background: "#fff8e1", border: "1px solid #ffe08a" }}
-        >
-          {notice.message}
-        </div>
-      ))}
-
-      <div style={styles.row}>
-        <input
-          style={styles.input}
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Meeting title"
-          disabled={isRecording || isBusy}
-          aria-label="Meeting title"
-        />
-        {isRecording ? (
-          <button type="button" style={styles.button} onClick={stop} disabled={isBusy}>
-            Stop recording
-          </button>
-        ) : (
-          <button
-            type="button"
-            style={styles.button}
-            onClick={() => start(title.trim() || "Untitled meeting")}
-            disabled={isBusy || connectionState !== "open"}
-          >
-            {meetingStatus === "starting" ? "Starting…" : "Start recording"}
-          </button>
-        )}
-      </div>
-
-      <h2 style={{ marginTop: "2rem" }}>Transcript</h2>
-
-      {lines.length === 0 ? (
-        <p style={{ color: "#666" }}>
-          {isRecording
-            ? "Listening… the first line appears after about 20 seconds."
-            : "Nothing yet. Start a recording to see the transcript."}
-        </p>
-      ) : (
-        <div>
-          {lines.map((line) => (
-            <div key={line.sequence} style={styles.line}>
-              <span style={styles.speaker}>{line.speakerLabel}</span>
-              <span>{line.text}</span>
+      <main className="app__main">
+        {mismatch && (
+          <div className="banner banner--warn" role="status">
+            <div className="banner__body">
+              <strong className="banner__title">Version mismatch</strong>
+              This page is v{mismatch.client} but the server is v{mismatch.server}. One
+              half was deployed without the other.
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
 
-      {meetingStatus === "stopped" && (
-        <p style={{ color: "#666" }}>
-          Recording stopped. Summarization is wired in Phase 5.
-        </p>
-      )}
+        {/* Remounting per route means one screen's crash cannot strand another. */}
+        <ErrorBoundary key={`${route.screen}:${route.meetingId ?? ""}`}>
+          {route.screen === "record" && (
+            <RecordingScreen session={session} onViewMinutes={openMeeting} />
+          )}
 
-      <p style={{ marginTop: "2rem", fontSize: "0.85rem", color: "#666" }}>
-        Speaker labels are inferred from pauses in the audio, not from voice
-        recognition, so they may be wrong — especially with more than two people.
-        You can rename any speaker.
-      </p>
+          {route.screen === "history" && (
+            <MeetingHistory onOpen={openMeeting} onStartRecording={() => navigate("#/")} />
+          )}
 
-      <footer style={styles.footer}>
-        {versionInfo.name} v{versionInfo.version} · {versionInfo.releaseDate}
+          {route.screen === "minutes" && route.meetingId && (
+            <MinutesView
+              meetingId={route.meetingId}
+              onBack={() => navigate("#/meetings")}
+            />
+          )}
+        </ErrorBoundary>
+      </main>
+
+      <footer className="footer">
+        {local.name} v{local.version} · {local.releaseDate}
       </footer>
-    </main>
+    </div>
   );
 }

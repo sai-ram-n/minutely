@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createMeetingClient, blobToBase64 } from "../lib/meetingClient.js";
+import { api } from "../lib/api.js";
 import { createChunkedRecorder } from "../lib/audioRecorder.js";
 import { websocketUrl } from "../lib/config.js";
 
@@ -25,6 +26,8 @@ export function useMeetingSocket() {
   const [notices, setNotices] = useState(/** @type {{id: number, message: string}[]} */ ([]));
   const [error, setError] = useState(/** @type {string | null} */ (null));
   const [meetingId, setMeetingId] = useState(/** @type {string | null} */ (null));
+  /** False when retrying genuinely cannot succeed, e.g. nothing was transcribed. */
+  const [canRetry, setCanRetry] = useState(true);
 
   const clientRef = useRef(null);
   const recorderRef = useRef(null);
@@ -78,6 +81,7 @@ export function useMeetingSocket() {
           case "mom_failed":
             setMeetingStatus("failed");
             setError(message.message);
+            setCanRetry(message.retryable !== false);
             break;
 
           case "error":
@@ -104,6 +108,7 @@ export function useMeetingSocket() {
     async (title) => {
       setError(null);
       setLines([]);
+      setCanRetry(true);
       setMeetingStatus("starting");
 
       let stream;
@@ -168,6 +173,23 @@ export function useMeetingSocket() {
     setTimeout(() => clientRef.current?.stopRecording(), 250);
   }, []);
 
+  /**
+   * Renames a speaker across the meeting and reflects it in the live transcript
+   * immediately, rather than waiting for a refetch.
+   */
+  const renameSpeaker = useCallback(
+    async (from, to) => {
+      if (!meetingId) return;
+      await api.renameSpeaker(meetingId, from, to);
+      setLines((current) =>
+        current.map((line) =>
+          line.speakerLabel === from ? { ...line, speakerLabel: to } : line,
+        ),
+      );
+    },
+    [meetingId],
+  );
+
   return {
     connectionState,
     meetingStatus,
@@ -175,8 +197,10 @@ export function useMeetingSocket() {
     lines,
     notices,
     error,
+    canRetry,
     start,
     stop,
+    renameSpeaker,
     dismissError: () => setError(null),
   };
 }

@@ -15,18 +15,40 @@ import { createSystemRouter } from "./routes/system.js";
 import { createMeetingsRouter } from "./routes/meetings.js";
 
 /**
- * Origins allowed to call this API. Locked to the deployed frontend — never "*",
- * because a public origin plus a free API key is a fast way to lose the day's quota.
- * @returns {Set<string>}
+ * Whether an origin may call this API.
+ *
+ * Production is strict: an exact match against FRONTEND_ORIGIN and nothing
+ * else — never "*", because a public origin plus a free API key is a fast way
+ * to lose the day's quota.
+ *
+ * Development also accepts any localhost port. Vite silently picks a different
+ * port when its default is taken, and pinning the allowlist to one port turns
+ * that into a WebSocket handshake 403 with no obvious cause.
+ *
+ * @param {string | undefined} origin
+ * @returns {boolean}
  */
-export function allowedOrigins() {
-  const origins = new Set([env.FRONTEND_ORIGIN]);
+export function isOriginAllowed(origin) {
+  // No Origin header: curl, server-to-server, and the host's own health probe.
+  // Not a browser request, so CORS does not apply.
+  if (!origin) return true;
+  if (origin === env.FRONTEND_ORIGIN) return true;
+
   if (env.NODE_ENV !== "production") {
-    // Vite's dev server, on both hostnames it answers to.
-    origins.add("http://localhost:5173");
-    origins.add("http://127.0.0.1:5173");
+    return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
   }
-  return origins;
+
+  return false;
+}
+
+/**
+ * Human-readable description of what is allowed, for boot logs and errors.
+ * @returns {string}
+ */
+export function describeAllowedOrigins() {
+  return env.NODE_ENV === "production"
+    ? env.FRONTEND_ORIGIN
+    : `${env.FRONTEND_ORIGIN} plus any localhost port (development only)`;
 }
 
 /**
@@ -36,7 +58,6 @@ export function allowedOrigins() {
  */
 export function createApp(options = {}) {
   const app = express();
-  const allowed = allowedOrigins();
 
   // Render terminates TLS upstream; without this, rate limiting sees one IP for
   // everyone and req.secure is always false.
@@ -48,10 +69,7 @@ export function createApp(options = {}) {
   app.use(
     cors({
       origin(origin, callback) {
-        // No Origin header: curl, server-to-server, and the host's own health
-        // probe. Not a browser request, so CORS does not apply.
-        if (!origin) return callback(null, true);
-        if (allowed.has(origin)) return callback(null, true);
+        if (isOriginAllowed(origin)) return callback(null, true);
         logger.warn({ origin }, "CORS rejected a disallowed origin");
         return callback(new Error("Not allowed by CORS"));
       },
