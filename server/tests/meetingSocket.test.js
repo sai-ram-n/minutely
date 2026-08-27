@@ -235,6 +235,68 @@ describe("audio_chunk", () => {
   });
 });
 
+describe("turn detection over the socket", () => {
+  it("splits one chunk into two lines when a long pause separates them", async () => {
+    const twoTurns = {
+      name: "two-turn-fake",
+      transcribe: async () => ({
+        text: "we should ship on Friday I disagree",
+        segments: [
+          { start: 0, end: 2, text: "we should ship on Friday" },
+          // A 2s pause: past the 1.5s threshold, so a new speaker.
+          { start: 4, end: 6, text: "I disagree" },
+        ],
+      }),
+      summarize: async () => ({ decisions: [], action_items: [], open_questions: [] }),
+    };
+
+    await server.close();
+    server = await startTestServer({ provider: twoTurns });
+
+    const { client, meetingId } = await startRecording();
+    client.send({ type: "audio_chunk", meetingId, data: AUDIO, sequence: 0 });
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    const lines = await getTranscriptLines(meetingId);
+    expect(lines).toHaveLength(2);
+    expect(lines[0].speaker_label).toBe("Speaker 1");
+    expect(lines[1].speaker_label).toBe("Speaker 2");
+    expect(lines.map((l) => l.sequence)).toEqual([0, 1]);
+
+    await client.close();
+  });
+
+  it("keeps line sequence increasing across chunks, independent of chunk sequence", async () => {
+    const twoTurns = {
+      name: "two-turn-fake",
+      transcribe: async () => ({
+        text: "one two",
+        segments: [
+          { start: 0, end: 1, text: "one" },
+          { start: 3, end: 4, text: "two" },
+        ],
+      }),
+      summarize: async () => ({ decisions: [], action_items: [], open_questions: [] }),
+    };
+
+    await server.close();
+    server = await startTestServer({ provider: twoTurns });
+
+    const { client, meetingId } = await startRecording();
+    client.send({ type: "audio_chunk", meetingId, data: AUDIO, sequence: 0, startOffsetMs: 0 });
+    await new Promise((r) => setTimeout(r, 200));
+    client.send({ type: "audio_chunk", meetingId, data: AUDIO, sequence: 1, startOffsetMs: 19000 });
+    await new Promise((r) => setTimeout(r, 300));
+
+    const lines = await getTranscriptLines(meetingId);
+    // Two chunks x two turns each = four lines, sequenced 0..3.
+    expect(lines.map((l) => l.sequence)).toEqual([0, 1, 2, 3]);
+
+    await client.close();
+  });
+});
+
 describe("transcription failure", () => {
   it("tells the client instead of silently dropping the chunk", async () => {
     await server.close();

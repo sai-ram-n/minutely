@@ -24,6 +24,7 @@ import {
   transcribeChunk,
   enqueue,
   clearQueue,
+  clearTurnState,
 } from "../services/transcription.js";
 import {
   createMeeting,
@@ -231,7 +232,8 @@ async function handleAudioChunk({ socket, message, provider, log }) {
   // transcription requests finish out of order.
   await enqueue(message.meetingId, async () => {
     try {
-      const line = await transcribeChunk({
+      // One chunk can contain several speaker turns, so this returns an array.
+      const lines = await transcribeChunk({
         provider,
         meetingId: message.meetingId,
         audio,
@@ -240,7 +242,7 @@ async function handleAudioChunk({ socket, message, provider, log }) {
         startOffsetMs: message.startOffsetMs,
       });
 
-      if (line) {
+      for (const line of lines) {
         send(
           socket,
           outbound.transcriptLine({
@@ -284,6 +286,7 @@ async function handleStop({ socket, message, log, options }) {
   // is not lost.
   await enqueue(message.meetingId, async () => {});
   clearQueue(message.meetingId);
+  clearTurnState(message.meetingId);
 
   const endedAt = new Date().toISOString();
   await updateMeetingStatus(message.meetingId, "processing", { endedAt });

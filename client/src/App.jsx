@@ -56,7 +56,7 @@ export default function App() {
     <main style={styles.page}>
       <h1>Minutely</h1>
       <p style={{ color: "#666", marginTop: "-0.5rem" }}>
-        Phase 3 — WebSocket plumbing. Bare page; the real UI comes in Phase 6.
+        Phase 4 — turn detection. Bare page; the real UI comes in Phase 6.
       </p>
 
       <p>
@@ -133,8 +133,9 @@ export default function App() {
       )}
 
       <p style={{ marginTop: "2rem", fontSize: "0.85rem", color: "#666" }}>
-        Speakers are inferred from pauses, not voice recognition — turn detection
-        lands in Phase 4, so everything is currently labelled Speaker 1.
+        Speaker labels are inferred from pauses in the audio, not from voice
+        recognition, so they may be wrong — especially with more than two people.
+        You can rename any speaker.
       </p>
 
       <footer style={styles.footer}>

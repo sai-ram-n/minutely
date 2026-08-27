@@ -12,6 +12,7 @@ import rateLimit from "express-rate-limit";
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import { createSystemRouter } from "./routes/system.js";
+import { createMeetingsRouter } from "./routes/meetings.js";
 
 /**
  * Origins allowed to call this API. Locked to the deployed frontend — never "*",
@@ -69,6 +70,7 @@ export function createApp() {
   });
 
   app.use("/api", apiLimiter, createSystemRouter());
+  app.use("/api/meetings", apiLimiter, createMeetingsRouter());
 
   app.use((req, res) => {
     res.status(404).json({ error: `Not found: ${req.method} ${req.originalUrl}` });

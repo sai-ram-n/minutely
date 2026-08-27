@@ -239,3 +239,58 @@ export async function getTranscriptText(meetingId) {
   const lines = await getTranscriptLines(meetingId);
   return lines.map((line) => `${line.speaker_label}: ${line.text}`).join("\n");
 }
+
+/**
+ * Next line sequence for a meeting.
+ *
+ * A single audio chunk can contain several speaker turns, so line sequence is
+ * not the same as chunk sequence. Derived from the database rather than held in
+ * memory, so it stays correct across a restart.
+ *
+ * @param {string} meetingId
+ * @returns {Promise<number>}
+ */
+export async function getNextLineSequence(meetingId) {
+  const result = await getClient().execute({
+    sql: `SELECT COALESCE(MAX(sequence), -1) + 1 AS next
+          FROM transcript_lines WHERE meeting_id = ?`,
+    args: [meetingId],
+  });
+  return Number(result.rows[0]?.next ?? 0);
+}
+
+/**
+ * Renames a speaker across a meeting's transcript.
+ *
+ * Stored as a plain relabel of the affected rows: the schema has one label per
+ * line and no separate override table, so this keeps the data model as
+ * specified rather than adding a table for a single field.
+ *
+ * @param {string} meetingId
+ * @param {string} from Existing label, e.g. "Speaker 2"
+ * @param {string} to   New label
+ * @returns {Promise<number>} Rows updated
+ */
+export async function renameSpeaker(meetingId, from, to) {
+  const result = await getClient().execute({
+    sql: `UPDATE transcript_lines SET speaker_label = ?
+          WHERE meeting_id = ? AND speaker_label = ?`,
+    args: [to, meetingId, from],
+  });
+  return Number(result.rowsAffected ?? 0);
+}
+
+/**
+ * Distinct speaker labels in a meeting, in the order they first speak.
+ * @param {string} meetingId
+ * @returns {Promise<string[]>}
+ */
+export async function listSpeakers(meetingId) {
+  const result = await getClient().execute({
+    sql: `SELECT speaker_label, MIN(sequence) AS first_seen
+          FROM transcript_lines WHERE meeting_id = ?
+          GROUP BY speaker_label ORDER BY first_seen ASC`,
+    args: [meetingId],
+  });
+  return result.rows.map((row) => String(row.speaker_label));
+}

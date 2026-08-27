@@ -11,7 +11,7 @@ time-limited trials.
 
 ## Status
 
-Phase 3 of 10 complete (WebSocket plumbing). See [Build order](#build-order).
+Phase 4 of 10 complete (turn detection). See [Build order](#build-order).
 
 ## Requirements
 
@@ -42,6 +42,7 @@ migrated automatically on first boot.
 | `npm run migrate` | Apply database migrations (idempotent) |
 | `node scripts/verify-provider.mjs` | Live check against the real Groq API (spends quota, needs network) |
 | `node scripts/verify-socket.mjs` | End-to-end socket check against a running server (spends quota) |
+| `node scripts/verify-turns.mjs` | Turn-detection check against real two-turn audio (spends quota) |
 
 ## Versioning — one file, one edit
 
@@ -85,6 +86,8 @@ Both are enforced at boot.
 |---|---|
 | `GET /api/health` | Liveness **and** database reachability. Exempt from rate limiting — use it to wake a sleeping host. |
 | `GET /api/version` | `{ name, version, releaseDate }` from `version.json` |
+| `GET /api/meetings/:id/speakers` | Distinct speaker labels, in first-spoken order |
+| `PATCH /api/meetings/:id/speakers` | Rename a speaker: `{ from, to }` |
 
 ### WebSocket (`/ws`)
 
@@ -108,6 +111,18 @@ server -> client   { type: "resumed", meetingId, lines }
 
 Every inbound message is validated with zod before any handler touches it, so a
 malformed payload becomes an error reply rather than a crashed server.
+
+### How turn detection works
+
+Timings come from Whisper's `verbose_json` segments. Because those times are
+relative to each audio chunk, every segment is offset by its chunk's position in
+the meeting — without that, a pause spanning a chunk boundary would be invisible,
+which is the most likely place for a real speaker change to occur.
+
+`detectTurns()` in `server/src/services/turnDetection.js` is a pure function:
+state goes in and comes back out, nothing is held in module scope. A single audio
+chunk can therefore contain several turns, which is why transcript line sequence
+is independent of chunk sequence.
 
 ### Why recording is chunked the way it is
 
@@ -168,8 +183,12 @@ now defaults to `openai/gpt-oss-120b`. Override either model with
 ## Known limitations
 
 - **No true speaker identification.** No free hosted diarization API exists, so
-  speakers are inferred from silence gaps and labelled generically
-  ("Speaker 1", "Speaker 2"). You can rename them. This is stated in the UI too.
+  turn *changes* are inferred from silence gaps in Whisper's segment timings — a
+  pause of 1.5s or more advances the label. This detects that the speaker
+  probably changed, never who is talking. Labels cycle through two speakers by
+  default, so a three-person meeting will mislabel someone; renaming fixes it,
+  and `PATCH /api/meetings/:id/speakers` merges two labels if one person got
+  split in two. This limitation is stated in the UI, not just here.
 - **Mic input only** — no Zoom/Meet tab audio capture.
 - **No transcript editing** after the fact (renaming speakers is fine).
 - **No accounts** — single-user tool.
@@ -191,7 +210,7 @@ now defaults to `openai/gpt-oss-120b`. Override either model with
 1. ✅ Server skeleton — env validation, `/api/health`, Turso connection, migrations
 2. ✅ `AiProvider` interface + Groq implementation, with retry/backoff and tests
 3. ✅ WebSocket plumbing — mic → chunked upload → live transcript
-4. ⬜ Silence-gap turn detection
+4. ✅ Silence-gap turn detection
 5. ⬜ Summarization — prompt + structured JSON parsing
 6. ⬜ UI for all three screens, with loading/error/empty states
 7. ⬜ PDF/Markdown export, stamped with version and date
