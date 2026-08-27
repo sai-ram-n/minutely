@@ -114,6 +114,12 @@ export default [
     },
   },
   {
+    // Build-time config runs in Node, not the browser, even though it lives
+    // inside the client package.
+    files: ["client/vite.config.js", "client/*.config.js"],
+    languageOptions: { globals: nodeGlobals },
+  },
+  {
     files: [
       "server/tests/**/*.js",
       "client/src/**/*.test.{js,jsx}",

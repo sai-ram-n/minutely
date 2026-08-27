@@ -1,8 +1,46 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+/**
+ * Fails a production build that has no backend configured.
+ *
+ * The frontend and backend are deployed to different hosts, so a production
+ * build without VITE_API_URL produces an app that cannot reach its API and
+ * whose WebSocket points at the static host. That failure is invisible until
+ * someone opens the deployed site, which is the worst time to find it.
+ *
+ * Opt into a same-origin build with VITE_SAME_ORIGIN=true.
+ */
+function requireBackendUrl() {
+  return {
+    name: "minutely:require-backend-url",
+    apply: "build",
+    config(_config, { mode }) {
+      if (mode !== "production") return;
+      if (process.env.VITE_SAME_ORIGIN === "true") return;
+      if (process.env.VITE_API_URL) return;
+
+      throw new Error(
+        [
+          "",
+          "  Production build is missing VITE_API_URL.",
+          "",
+          "  The frontend and backend live on different hosts, so the client needs",
+          "  to be told where the backend is. Set it to your deployed backend origin:",
+          "",
+          "      VITE_API_URL=https://your-service.onrender.com",
+          "",
+          "  The WebSocket URL is derived from it automatically.",
+          "  If you really are serving both from one origin, set VITE_SAME_ORIGIN=true.",
+          "",
+        ].join("\n"),
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), requireBackendUrl()],
   server: {
     port: 5173,
     // Dev-only convenience: the client talks to the API and socket on the same

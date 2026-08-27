@@ -11,7 +11,7 @@ time-limited trials.
 
 ## Status
 
-Phase 7 of 10 complete (export). See [Build order](#build-order).
+Phase 7 of 10 complete. Phase 8 (deploy) is ready to run — see [Deploying](#deploying).
 
 ## Requirements
 
@@ -252,6 +252,79 @@ now defaults to `openai/gpt-oss-120b`. Override either model with
 - **No accounts** — single-user tool.
 - **The free backend sleeps** after 15 minutes idle; the next request takes
   30–60s to wake it. See the demo-day checklist.
+
+## Deploying
+
+Three services, none of which need a credit card. Do them in this order — Turso
+first, because the backend cannot start without it.
+
+### 1. Turso (database)
+
+Sign in at [turso.tech](https://turso.tech) with GitHub, create a database, and
+copy two values:
+
+- `TURSO_DATABASE_URL` — the `libsql://...` URL
+- `TURSO_AUTH_TOKEN`
+
+The schema creates itself on first boot; there is nothing to run by hand.
+
+### 2. Render (backend)
+
+New → Web Service → connect this repo. [render.yaml](render.yaml) already
+defines the build, start command, health check and Node version, so the only
+thing to do by hand is set the four secret env vars in the dashboard:
+
+| Variable | Value |
+|---|---|
+| `GROQ_API_KEY` | your Groq key |
+| `TURSO_DATABASE_URL` | from step 1 |
+| `TURSO_AUTH_TOKEN` | from step 1 |
+| `FRONTEND_ORIGIN` | *leave for step 4* |
+
+Note the service URL (e.g. `https://minutely-api.onrender.com`).
+
+The server **refuses to start** in production against a local SQLite file or a
+`localhost` CORS origin, so a misconfiguration fails at boot with a readable
+message rather than at the first request.
+
+### 3. Cloudflare Pages (frontend)
+
+Create a project from this repo with:
+
+| Setting | Value |
+|---|---|
+| Build command | `npm run build` |
+| Build output directory | `client/dist` |
+| Environment variable | `VITE_API_URL` = your Render URL from step 2 |
+| Environment variable | `NODE_VERSION` = `22` |
+
+`VITE_API_URL` is the **only** URL to configure — the WebSocket URL is derived
+from it. A production build without it fails deliberately rather than shipping a
+frontend that cannot reach its backend.
+
+Note the Pages URL (e.g. `https://minutely.pages.dev`).
+
+### 4. Close the loop
+
+Render needs the Pages URL and Pages needs the Render URL, so one of them is
+always set second. Go back to Render, set:
+
+```
+FRONTEND_ORIGIN=https://your-project.pages.dev
+```
+
+and redeploy. CORS is locked to exactly this value.
+
+### 5. Verify
+
+```bash
+curl https://your-service.onrender.com/api/health
+curl https://your-service.onrender.com/api/version
+```
+
+Then open the Pages URL. The footer version must match `/api/version` — if it
+does not, the browser console says so explicitly, which means one half was
+deployed without the other.
 
 ## Demo-day checklist
 

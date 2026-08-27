@@ -1,0 +1,44 @@
+# Render blueprint.
+#
+# Keeps the service definition in the repo rather than in a hand-clicked
+# dashboard, so it is reproducible and reviewable.
+#
+# Secrets are deliberately NOT here: GROQ_API_KEY and the Turso credentials are
+# marked sync:false and must be set in the Render dashboard. Never commit them.
+
+services:
+  - type: web
+    name: minutely-api
+    runtime: node
+    plan: free
+    region: oregon
+    branch: dev
+
+    # The repo is a workspace root. Only the server runs here — the client is
+    # built on Cloudflare Pages — so dev dependencies are omitted explicitly
+    # rather than relying on NODE_ENV to imply it.
+    buildCommand: npm ci --omit=dev && npm run sync-version
+    startCommand: npm start --workspace server
+
+    # Render polls this to decide the service is live. It is exempt from our own
+    # rate limiting for exactly this reason.
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+
+      # Set these in the dashboard — they are secrets.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+
+      # The deployed Cloudflare Pages origin. CORS is locked to exactly this,
+      # so it must be set before the frontend can talk to the API.
+      - key: FRONTEND_ORIGIN
+        sync: false
