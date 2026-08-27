@@ -1,0 +1,11 @@
+Speaker 1: Alright, let's start. The main thing today is whether we ship the billing rewrite this Friday or push it a week.
+Speaker 2: I've got the migration script ready. I can run it against staging Thursday morning, so Friday is realistic from my side.
+Speaker 1: Okay. Let's commit to Friday then, assuming staging comes back clean.
+Speaker 2: Agreed. One thing though, we still don't have a rollback plan if the migration goes sideways in production.
+Speaker 1: That's fair. Priya, can you write one up before Thursday?
+Speaker 3: Yes, I'll have a rollback doc ready by Wednesday end of day.
+Speaker 1: Good. The other open item is pricing. Do we grandfather existing customers at the old rate or move everyone over?
+Speaker 2: I don't think we can decide that today, we need finance in the room.
+Speaker 1: Fine, we'll park it. Last thing, the status page copy still says beta. Someone needs to fix that before launch.
+Speaker 3: I'll take it. No firm date yet, it's small.
+Speaker 1: Great, that's everything.

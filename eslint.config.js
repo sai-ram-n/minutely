@@ -23,6 +23,12 @@ const nodeGlobals = {
   AbortSignal: "readonly",
   structuredClone: "readonly",
   __dirname: "readonly",
+  // Web-standard APIs available as Node globals since 18.
+  FormData: "readonly",
+  Blob: "readonly",
+  Response: "readonly",
+  Request: "readonly",
+  Headers: "readonly",
 };
 
 const browserGlobals = {

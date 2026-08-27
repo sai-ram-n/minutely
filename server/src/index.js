@@ -12,6 +12,7 @@ import { createApp } from "./app.js";
 import { migrate } from "./services/migrate.js";
 import { closeClient, describeTarget } from "./services/db.js";
 import { readVersion } from "./config/env.js";
+import { getProvider } from "./ai/index.js";
 
 const version = readVersion();
 
@@ -29,6 +30,15 @@ async function main() {
     );
   } catch (err) {
     logger.fatal({ err: err.message }, "database migration failed — refusing to start");
+    process.exit(1);
+  }
+
+  // Validate the AI provider's shape before accepting traffic, so a missing or
+  // misspelled method surfaces here rather than mid-meeting.
+  try {
+    getProvider();
+  } catch (err) {
+    logger.fatal({ err: err.message }, "AI provider is invalid — refusing to start");
     process.exit(1);
   }
 

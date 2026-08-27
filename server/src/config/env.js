@@ -72,6 +72,38 @@ const envSchema = z
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
+
+    // --- AI provider -------------------------------------------------------
+    // Model IDs are configuration, not code. Providers retire models (Groq
+    // retired llama-3.3-70b-versatile, which this project originally named), so
+    // swapping one must never require a code change or a redeploy of anything
+    // but an env var.
+
+    GROQ_BASE_URL: z
+      .string()
+      .trim()
+      .url("GROQ_BASE_URL must be a valid URL")
+      .default("https://api.groq.com/openai/v1"),
+
+    GROQ_TRANSCRIBE_MODEL: z
+      .string()
+      .trim()
+      .min(1)
+      .default("whisper-large-v3-turbo"),
+
+    GROQ_SUMMARY_MODEL: z
+      .string()
+      .trim()
+      .min(1)
+      .default("openai/gpt-oss-120b"),
+
+    // Request timeout for a single AI call, before retry logic gets involved.
+    AI_REQUEST_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(300000)
+      .default(120000),
   })
   .superRefine((env, ctx) => {
     // A remote libsql:// database is unreachable without a token. Catching this

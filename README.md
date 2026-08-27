@@ -11,7 +11,7 @@ time-limited trials.
 
 ## Status
 
-Phase 1 of 10 complete (server skeleton). See [Build order](#build-order).
+Phase 2 of 10 complete (AI provider). See [Build order](#build-order).
 
 ## Requirements
 
@@ -40,6 +40,7 @@ migrated automatically on first boot.
 | `npm run lint` | Lint everything |
 | `npm run sync-version` | Propagate `version.json` everywhere it is used |
 | `npm run migrate` | Apply database migrations (idempotent) |
+| `node scripts/verify-provider.mjs` | Live check against the real Groq API (spends quota, needs network) |
 
 ## Versioning — one file, one edit
 
@@ -102,6 +103,23 @@ All Groq calls sit behind a small `AiProvider` interface
 *inside* the provider, not scattered through route handlers. Swapping to another
 provider is one new file matching the same shape plus a config change.
 
+The provider is shape-checked with `assertValidProvider()` once at startup, so a
+missing or misspelled method fails at boot rather than mid-meeting.
+
+**Model IDs are configuration, not code.** Groq retired
+`llama-3.3-70b-versatile`, which this project originally specified; summarization
+now defaults to `openai/gpt-oss-120b`. Override either model with
+`GROQ_SUMMARY_MODEL` / `GROQ_TRANSCRIBE_MODEL` without a code change.
+
+### Test fixtures
+
+`server/tests/fixtures/audio/` holds two clips derived from a
+[LibriVox](https://librivox.org) recording (public domain):
+
+- `sample-speech.webm` — 25s of speech, for verifying transcription
+- `two-turns.webm` — two passages separated by a known 2.0s silence, for
+  verifying silence-gap turn detection
+
 ## Security
 
 - `GROQ_API_KEY` and Turso credentials live only in server environment variables
@@ -135,7 +153,7 @@ provider is one new file matching the same shape plus a config change.
 ## Build order
 
 1. ✅ Server skeleton — env validation, `/api/health`, Turso connection, migrations
-2. ⬜ `AiProvider` interface + Groq implementation, with retry/backoff and tests
+2. ✅ `AiProvider` interface + Groq implementation, with retry/backoff and tests
 3. ⬜ WebSocket plumbing — mic → chunked upload → live transcript
 4. ⬜ Silence-gap turn detection
 5. ⬜ Summarization — prompt + structured JSON parsing
