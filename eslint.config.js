@@ -52,6 +52,8 @@ const browserGlobals = {
   atob: "readonly",
   Element: "readonly",
   HTMLElement: "readonly",
+  HTMLAnchorElement: "readonly",
+  Blob: "readonly",
   Node: "readonly",
   MediaRecorder: "readonly",
   Uint8Array: "readonly",

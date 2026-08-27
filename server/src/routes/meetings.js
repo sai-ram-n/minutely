@@ -17,6 +17,12 @@ import {
   renameSpeaker,
 } from "../services/db.js";
 import { summarizeMeeting } from "../services/summarize.js";
+import {
+  buildMarkdown,
+  buildPdf,
+  exportFilename,
+} from "../services/export.js";
+import { readVersion } from "../config/env.js";
 import { getProvider } from "../ai/index.js";
 
 const meetingIdSchema = z.string().uuid();
@@ -237,6 +243,92 @@ export function createMeetingsRouter(options = {}) {
       }
 
       res.json({ status: meeting.status, minutes });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * Loads everything an export needs, or writes the appropriate error.
+   * @returns {Promise<import("../services/export.js").ExportInput | null>}
+   */
+  async function loadExportInput(req, res) {
+    const id = parseMeetingId(req, res);
+    if (!id) return null;
+
+    const meeting = await getMeeting(id);
+    if (!meeting) {
+      res.status(404).json({ error: "Meeting not found" });
+      return null;
+    }
+
+    const [transcript, minutes] = await Promise.all([
+      getTranscriptLines(id),
+      getMinutes(id),
+    ]);
+
+    return {
+      meeting: {
+        id: meeting.id,
+        title: meeting.title,
+        startedAt: meeting.started_at,
+        endedAt: meeting.ended_at,
+        status: meeting.status,
+      },
+      transcript: transcript.map((line) => ({
+        speakerLabel: line.speaker_label,
+        text: line.text,
+        sequence: line.sequence,
+      })),
+      minutes,
+      version: readVersion(),
+    };
+  }
+
+  /**
+   * Content-Disposition with both a plain and a UTF-8 filename, so a title in
+   * any script still produces a sensible download name.
+   */
+  function setDownloadHeaders(res, filename, contentType) {
+    const asciiFallback = filename.replace(/[^\x20-\x7e]/g, "_");
+    res.setHeader("Content-Type", contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    // These are generated per request and reflect live data.
+    res.setHeader("Cache-Control", "no-store");
+  }
+
+  router.get("/:id/export.md", async (req, res, next) => {
+    try {
+      const input = await loadExportInput(req, res);
+      if (!input) return;
+
+      const markdown = buildMarkdown(input);
+      setDownloadHeaders(
+        res,
+        exportFilename(input.meeting, "md"),
+        "text/markdown; charset=utf-8",
+      );
+      res.send(markdown);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/:id/export.pdf", async (req, res, next) => {
+    try {
+      const input = await loadExportInput(req, res);
+      if (!input) return;
+
+      // Buffered, so a generation failure becomes a clean error rather than a
+      // truncated download the user cannot tell is broken.
+      const pdf = await buildPdf(input);
+
+      setDownloadHeaders(res, exportFilename(input.meeting, "pdf"), "application/pdf");
+      res.setHeader("Content-Length", pdf.length);
+      res.send(pdf);
     } catch (err) {
       next(err);
     }

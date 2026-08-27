@@ -9,6 +9,7 @@ import { useState } from "react";
 import { api } from "../lib/api.js";
 import { useAsync } from "../hooks/useAsync.js";
 import { TranscriptFeed } from "./TranscriptFeed.jsx";
+import { ExportButtons } from "./ExportButtons.jsx";
 import {
   EmptyState,
   ErrorState,
@@ -85,6 +86,10 @@ export function MinutesView({ meetingId, onBack }) {
         {duration ? ` · ${duration}` : ""}
         {` · ${transcript.length} line${transcript.length === 1 ? "" : "s"}`}
       </p>
+
+      <div style={{ marginBottom: "1.25rem" }}>
+        <ExportButtons meetingId={meetingId} disabled={meeting.status === "recording"} />
+      </div>
 
       {meeting.status === "failed" && (
         <ErrorState
