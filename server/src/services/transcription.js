@@ -71,6 +71,21 @@ export function dedupeOverlap(previousText, newText, maxWindow = 15) {
 }
 
 /**
+ * Whether transcribed text contains anything worth storing.
+ *
+ * Whisper returns a bare "." or "..." for a chunk of near-silence — not an
+ * empty string, so a trim-only check lets it through and it shows up in the
+ * transcript as a line containing a full stop. Observed in a real four-minute
+ * recording: two such lines at the end, after the audio ran out.
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function hasSpeech(text) {
+  return /[\p{L}\p{N}]/u.test(String(text ?? ""));
+}
+
+/**
  * Serial queues, one per meeting.
  *
  * Transcription requests run concurrently, but their results must be applied in
@@ -169,7 +184,7 @@ export async function transcribeChunk({
   const result = await provider.transcribe(audio, { mimeType });
   const rawText = (result.text ?? "").trim();
 
-  if (rawText === "") {
+  if (!hasSpeech(rawText)) {
     logger.debug({ meetingId, sequence }, "chunk transcribed to silence — nothing stored");
     return [];
   }
@@ -194,7 +209,7 @@ export async function transcribeChunk({
   const previousText = previous?.text ?? "";
   turns[0].text = dedupeOverlap(previousText, turns[0].text).trim();
 
-  const storable = turns.filter((turn) => turn.text !== "");
+  const storable = turns.filter((turn) => hasSpeech(turn.text));
 
   if (storable.length === 0) {
     logger.debug(

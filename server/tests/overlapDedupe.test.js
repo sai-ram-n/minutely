@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { dedupeOverlap } from "../src/services/transcription.js";
+import { dedupeOverlap, hasSpeech } from "../src/services/transcription.js";
 
 describe("dedupeOverlap", () => {
   it("trims words repeated from the end of the previous line", () => {
@@ -93,5 +93,47 @@ describe("dedupeOverlap", () => {
 
   it("does not trim when only punctuation would match", () => {
     expect(dedupeOverlap("...", "--- the meeting begins")).toBe("--- the meeting begins");
+  });
+});
+
+describe("hasSpeech", () => {
+  it("accepts ordinary text", () => {
+    expect(hasSpeech("we should ship on Friday")).toBe(true);
+  });
+
+  it("rejects a bare full stop, which Whisper returns for near-silence", () => {
+    // Found in a real four-minute recording: two lines containing only "."
+    // appeared after the audio ran out, because a trim-only check let them past.
+    expect(hasSpeech(".")).toBe(false);
+    expect(hasSpeech("...")).toBe(false);
+    expect(hasSpeech(" . ")).toBe(false);
+  });
+
+  it("rejects other punctuation-only output", () => {
+    expect(hasSpeech("-")).toBe(false);
+    expect(hasSpeech("?!")).toBe(false);
+    expect(hasSpeech("—")).toBe(false);
+  });
+
+  it("rejects empty and whitespace", () => {
+    expect(hasSpeech("")).toBe(false);
+    expect(hasSpeech("   ")).toBe(false);
+    expect(hasSpeech(null)).toBe(false);
+    expect(hasSpeech(undefined)).toBe(false);
+  });
+
+  it("accepts a single real word, however short", () => {
+    expect(hasSpeech("Yes.")).toBe(true);
+    expect(hasSpeech("OK")).toBe(true);
+  });
+
+  it("accepts non-Latin scripts", () => {
+    // The check must not quietly discard speech it cannot categorise.
+    expect(hasSpeech("साई राम")).toBe(true);
+    expect(hasSpeech("会議")).toBe(true);
+  });
+
+  it("accepts a number-only utterance", () => {
+    expect(hasSpeech("2026")).toBe(true);
   });
 });
