@@ -55,6 +55,19 @@ Then open `http://localhost:5173` locally: that *is* a secure context, so the
 microphone works. Only the client port needs forwarding — API and WebSocket
 traffic is proxied through it.
 
+### Try it without a microphone
+
+The recording screen has a **Try a sample meeting** button. It plays a bundled
+100-second recording — several speakers, real pauses — through exactly the same
+path as a live recording: MediaRecorder, chunking, overlap, upload,
+transcription, turn detection, minutes. Nothing is stubbed, so what you watch is
+the real pipeline.
+
+Useful for seeing the whole thing work before trusting it with a real meeting,
+and as a demo-day fallback if live audio misbehaves. Source:
+[NASA, First Seven Astronauts Press Conference, 1959](https://archive.org/details/FirstSevenAstronautsPressConference)
+(public domain).
+
 ### What to expect on a first run
 
 Audio is uploaded in ~20 second chunks, so **the first transcript line appears
@@ -274,10 +287,14 @@ now defaults to `openai/gpt-oss-120b`. Override either model with
 - **No true speaker identification.** No free hosted diarization API exists, so
   turn *changes* are inferred from silence gaps in Whisper's segment timings — a
   pause of 1.5s or more advances the label. This detects that the speaker
-  probably changed, never who is talking. Labels cycle through two speakers by
-  default, so a three-person meeting will mislabel someone; renaming fixes it,
-  and `PATCH /api/meetings/:id/speakers` merges two labels if one person got
-  split in two. This limitation is stated in the UI, not just here.
+  probably changed, never who is talking.
+
+  Labels cycle through however many people **you say are in the meeting**, asked
+  up front on the recording screen. That number matters: tested against a real
+  four-person recording with it left at two, two different speakers were given
+  the same label — worse than incomplete, actively misleading. With four
+  declared, the same recording produced four distinct labels. Renaming still
+  fixes mistakes, and renaming onto an existing label merges two.
 - **Mic input only** — no Zoom/Meet tab audio capture.
 - **No transcript editing** after the fact (renaming speakers is fine).
 - **No accounts** — single-user tool.

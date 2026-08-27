@@ -52,6 +52,19 @@ const MIGRATIONS = [
         ON meetings (started_at DESC);
     `,
   },
+  {
+    id: "002_meeting_speaker_count",
+    sql: `
+      -- How many people are in the meeting, captured up front.
+      --
+      -- Silence-gap detection can tell that the speaker CHANGED but never who
+      -- is talking, so it cycles through a fixed set of labels. With the count
+      -- pinned to two, a four-person meeting gave two different people the same
+      -- label — worse than unhelpful, actively misleading. Asking up front is
+      -- the cheapest way to make the labels mean something.
+      ALTER TABLE meetings ADD COLUMN speaker_count INTEGER NOT NULL DEFAULT 2;
+    `,
+  },
 ];
 
 async function ensureMigrationsTable(client) {

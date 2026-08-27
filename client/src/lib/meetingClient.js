@@ -197,9 +197,13 @@ export function createMeetingClient({
       connect();
     },
 
-    /** @param {string} title */
-    startRecording(title) {
-      send({ type: "start_recording", title });
+    /** @param {string} title @param {number} [speakerCount] */
+    startRecording(title, speakerCount) {
+      send({
+        type: "start_recording",
+        title,
+        ...(speakerCount ? { speakerCount } : {}),
+      });
     },
 
     /** @param {{ base64: string, sequence: number, mimeType?: string, startOffsetMs?: number, overlapMs?: number }} chunk */

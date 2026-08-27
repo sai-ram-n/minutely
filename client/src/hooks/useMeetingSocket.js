@@ -10,6 +10,7 @@ import { createMeetingClient, blobToBase64 } from "../lib/meetingClient.js";
 import { api } from "../lib/api.js";
 import { createChunkedRecorder } from "../lib/audioRecorder.js";
 import { websocketUrl } from "../lib/config.js";
+import { playSampleMeeting, SAMPLE_MEETING } from "../lib/sampleAudio.js";
 
 /**
  * @typedef {Object} TranscriptLine
@@ -29,9 +30,12 @@ export function useMeetingSocket() {
   /** False when retrying genuinely cannot succeed, e.g. nothing was transcribed. */
   const [canRetry, setCanRetry] = useState(true);
 
+  const [isSample, setIsSample] = useState(false);
+
   const clientRef = useRef(null);
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
+  const samplePlaybackRef = useRef(null);
   const noticeId = useRef(0);
 
   const pushNotice = useCallback((message) => {
@@ -100,38 +104,20 @@ export function useMeetingSocket() {
     return () => {
       client.disconnect();
       recorderRef.current?.stop();
+      samplePlaybackRef.current?.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, [pushNotice]);
 
-  const start = useCallback(
-    async (title) => {
-      setError(null);
-      setLines([]);
-      setCanRetry(true);
-      setMeetingStatus("starting");
-
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-      } catch (err) {
-        setMeetingStatus("idle");
-        setError(
-          err?.name === "NotAllowedError"
-            ? "Microphone access was denied. Allow it in your browser and try again."
-            : "No microphone available. Check that one is connected and try again.",
-        );
-        return;
-      }
-
+  /**
+   * Shared by real recordings and the sample: everything after obtaining a
+   * MediaStream is identical, which is the point — the sample exercises the
+   * real pipeline rather than a scripted imitation.
+   */
+  const beginRecording = useCallback(
+    ({ stream, title, speakerCount }) => {
       streamRef.current = stream;
-      clientRef.current?.startRecording(title);
+      clientRef.current?.startRecording(title, speakerCount);
 
       const recorder = createChunkedRecorder({
         stream,
@@ -158,6 +144,77 @@ export function useMeetingSocket() {
     [pushNotice],
   );
 
+  const start = useCallback(
+    async ({ title, speakerCount }) => {
+      setError(null);
+      setLines([]);
+      setCanRetry(true);
+      setIsSample(false);
+      setMeetingStatus("starting");
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch (err) {
+        setMeetingStatus("idle");
+        setError(
+          err?.name === "NotAllowedError"
+            ? "Microphone access was denied. Allow it in your browser and try again."
+            : err?.name === "NotFoundError"
+              ? "No microphone was found. Connect one and try again."
+              : "Could not open the microphone. Check that no other app is using it.",
+        );
+        return;
+      }
+
+      beginRecording({ stream, title, speakerCount });
+    },
+    [beginRecording],
+  );
+
+  /**
+   * Runs the bundled sample recording through the real pipeline.
+   *
+   * No microphone, no permission prompt — useful for seeing the whole thing
+   * work, and for a demo where live audio is a risk.
+   */
+  const startSample = useCallback(async () => {
+    setError(null);
+    setLines([]);
+    setCanRetry(true);
+    setIsSample(true);
+    setMeetingStatus("starting");
+
+    let playback;
+    try {
+      playback = await playSampleMeeting();
+    } catch (err) {
+      setIsSample(false);
+      setMeetingStatus("idle");
+      setError(err.message ?? "Could not start the sample recording.");
+      return;
+    }
+
+    samplePlaybackRef.current = playback;
+    beginRecording({
+      stream: playback.stream,
+      title: SAMPLE_MEETING.title,
+      speakerCount: SAMPLE_MEETING.speakerCount,
+    });
+
+    // Stop on its own when the audio runs out, so it behaves like a meeting
+    // that ended rather than one left recording silence forever.
+    playback.finished.then(() => {
+      if (samplePlaybackRef.current === playback) stopRef.current?.();
+    });
+  }, [beginRecording]);
+
   const stop = useCallback(() => {
     setMeetingStatus("stopping");
 
@@ -166,12 +223,20 @@ export function useMeetingSocket() {
     recorderRef.current?.stop();
     recorderRef.current = null;
 
+    samplePlaybackRef.current?.stop();
+    samplePlaybackRef.current = null;
+
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
 
     // Give the final chunk a moment to be encoded and queued.
     setTimeout(() => clientRef.current?.stopRecording(), 250);
   }, []);
+
+  // Lets the sample's completion handler call the latest stop() without
+  // re-creating startSample every render.
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
 
   /**
    * Renames a speaker across the meeting and reflects it in the live transcript
@@ -198,7 +263,9 @@ export function useMeetingSocket() {
     notices,
     error,
     canRetry,
+    isSample,
     start,
+    startSample,
     stop,
     renameSpeaker,
     dismissError: () => setError(null),

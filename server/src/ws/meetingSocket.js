@@ -204,9 +204,16 @@ async function handleMessage({ socket, raw, provider, log, options }) {
 
 async function handleStart({ socket, message, log }) {
   const meetingId = randomUUID();
-  await createMeeting({ id: meetingId, title: message.title });
+  await createMeeting({
+    id: meetingId,
+    title: message.title,
+    speakerCount: message.speakerCount,
+  });
 
-  log.info({ meetingId, title: message.title }, "recording started");
+  log.info(
+    { meetingId, title: message.title, speakerCount: message.speakerCount },
+    "recording started",
+  );
   send(socket, outbound.recordingStarted(meetingId));
 }
 
@@ -239,6 +246,9 @@ async function handleAudioChunk({ socket, message, provider, log }) {
         sequence: message.sequence,
         mimeType: message.mimeType,
         startOffsetMs: message.startOffsetMs,
+        // Declared by the user when the meeting started, so turn labels cycle
+        // through the right number of people.
+        speakerCount: meeting.speaker_count,
       });
 
       for (const line of lines) {

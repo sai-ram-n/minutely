@@ -63,6 +63,7 @@ export function createMeetingsRouter(options = {}) {
           startedAt: meeting.started_at,
           endedAt: meeting.ended_at,
           status: meeting.status,
+          speakerCount: meeting.speaker_count,
         })),
       });
     } catch (err) {
@@ -94,6 +95,7 @@ export function createMeetingsRouter(options = {}) {
           startedAt: meeting.started_at,
           endedAt: meeting.ended_at,
           status: meeting.status,
+          speakerCount: meeting.speaker_count,
         },
         transcript: lines.map((line) => ({
           speakerLabel: line.speaker_label,

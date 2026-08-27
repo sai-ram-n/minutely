@@ -87,6 +87,7 @@ export function describeTarget() {
  * @property {string} started_at
  * @property {string | null} ended_at
  * @property {"recording" | "processing" | "done" | "failed"} status
+ * @property {number} speaker_count How many people the user said are present
  */
 
 /**
@@ -100,17 +101,24 @@ export function describeTarget() {
  */
 
 /**
- * @param {{ id: string, title: string, startedAt?: string }} meeting
+ * @param {{ id: string, title: string, startedAt?: string, speakerCount?: number }} meeting
  * @returns {Promise<MeetingRow>}
  */
-export async function createMeeting({ id, title, startedAt }) {
+export async function createMeeting({ id, title, startedAt, speakerCount = 2 }) {
   const started = startedAt ?? new Date().toISOString();
   await getClient().execute({
-    sql: `INSERT INTO meetings (id, title, started_at, status)
-          VALUES (?, ?, ?, 'recording')`,
-    args: [id, title, started],
+    sql: `INSERT INTO meetings (id, title, started_at, status, speaker_count)
+          VALUES (?, ?, ?, 'recording', ?)`,
+    args: [id, title, started, speakerCount],
   });
-  return { id, title, started_at: started, ended_at: null, status: "recording" };
+  return {
+    id,
+    title,
+    started_at: started,
+    ended_at: null,
+    status: "recording",
+    speaker_count: speakerCount,
+  };
 }
 
 /**

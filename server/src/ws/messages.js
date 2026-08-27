@@ -31,10 +31,22 @@ const base64Audio = z
     message: `audio chunk exceeds ${MAX_CHUNK_BYTES} bytes`,
   });
 
+/**
+ * Upper bound on generic speaker labels.
+ *
+ * Beyond a handful, turn-based labels stop being useful — you cannot follow
+ * "Speaker 9" in a transcript anyway — and the honest answer for a large
+ * meeting is to rename the few people who matter.
+ */
+export const MAX_SPEAKERS = 8;
+
 export const startRecordingSchema = z.object({
   type: z.literal("start_recording"),
   // Trimmed and bounded: this goes straight into the database and the UI.
   title: z.string().trim().min(1).max(200).default("Untitled meeting"),
+  // How many people are in the room. Turn detection cycles through this many
+  // labels, so getting it right is what makes the labels mean anything.
+  speakerCount: z.coerce.number().int().min(1).max(MAX_SPEAKERS).default(2),
 });
 
 export const audioChunkSchema = z.object({
