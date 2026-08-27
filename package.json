@@ -15,14 +15,13 @@
   "scripts": {
     "sync-version": "node scripts/sync-version.mjs",
     "predev": "npm run sync-version",
-    "dev": "npm run dev --workspace server",
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm run dev --workspace server",
     "prebuild": "npm run sync-version",
     "build": "npm run build --workspace client",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
-    "migrate": "npm run migrate --workspace server",
-    "dev:all": "npm run sync-version && node scripts/dev.mjs",
-    "dev:host": "CLIENT_HOST=0.0.0.0 npm run dev:all"
+    "migrate": "npm run migrate --workspace server"
   },
   "devDependencies": {
     "eslint": "^9.15.0",

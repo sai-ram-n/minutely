@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 
 /**
  * Fails a production build that has no backend configured.
@@ -40,27 +41,28 @@ function requireBackendUrl() {
 }
 
 export default defineConfig({
-  plugins: [react(), requireBackendUrl()],
+  plugins: [react(), basicSsl(), requireBackendUrl()],
   server: {
-    // Bind IPv4 explicitly. With no host set, Vite will happily bind IPv6-only
-    // when the IPv4 port is already taken — producing two dev servers on "the
-    // same" port that resolve differently depending on the client. Painful to
-    // debug, and this box already has another project on 5173.
+    // Served over HTTPS with a self-signed certificate, and bound to every
+    // interface, so ONE url works from any machine on the network.
     //
-    // CLIENT_HOST=0.0.0.0 (npm run dev:host) exposes it on the network. Note
-    // that the microphone will NOT work over plain http from another machine:
-    // getUserMedia requires a secure context, so only localhost or https will
-    // do. The sample recording still works, since it needs no microphone.
-    host: process.env.CLIENT_HOST ?? "127.0.0.1",
+    // HTTPS is not decoration: getUserMedia only works in a secure context, so
+    // over plain http from anything other than localhost the browser blocks the
+    // microphone outright and recording silently never starts. Serving https
+    // makes the network url a secure context, so the microphone works there.
+    //
+    // The API stays plain http behind this proxy — the browser only ever talks
+    // to this origin, so /api and /ws are https and wss to it, and there is no
+    // mixed-content problem and nothing else to configure.
+    host: process.env.CLIENT_HOST ?? "0.0.0.0",
     port: Number(process.env.CLIENT_PORT ?? 5173),
-    // Dev-only convenience: the client talks to the API and socket on the same
-    // origin, so no CORS or URL juggling locally. Production points at the
-    // deployed backend via VITE_API_URL / VITE_WS_URL.
+
     proxy: {
-      "/api": { target: "http://localhost:3001", changeOrigin: true },
-      "/ws": { target: "ws://localhost:3001", ws: true },
+      "/api": { target: `http://127.0.0.1:${process.env.PORT ?? 3001}`, changeOrigin: true },
+      "/ws": { target: `ws://127.0.0.1:${process.env.PORT ?? 3001}`, ws: true },
     },
   },
+
   build: {
     outDir: "dist",
     sourcemap: true,

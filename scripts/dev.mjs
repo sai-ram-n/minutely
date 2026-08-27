@@ -8,10 +8,36 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * Reads PORT out of server/.env.
+ *
+ * The server takes its port from there, but Vite's proxy needs the same value —
+ * and Vite does not read that file. Without this the two disagree the moment
+ * anyone changes PORT, and the symptom is an app that loads but whose every API
+ * call fails, which is a horrible thing to debug.
+ *
+ * @returns {string}
+ */
+function serverPort() {
+  if (process.env.PORT) return process.env.PORT;
+
+  const envFile = resolve(ROOT, "server", ".env");
+  if (existsSync(envFile)) {
+    const match = /^\s*PORT\s*=\s*(\d+)/m.exec(readFileSync(envFile, "utf8"));
+    if (match) return match[1];
+  }
+
+  return "3001";
+}
+
+const PORT = serverPort();
 
 const COLOURS = { api: "\x1b[36m", web: "\x1b[35m", reset: "\x1b[0m", dim: "\x1b[2m" };
 
@@ -28,7 +54,9 @@ let shuttingDown = false;
 function run(label, command, args, cwd) {
   const child = spawn(command, args, {
     cwd,
-    env: process.env,
+    // Both halves get the same PORT, so the client's proxy and the server's
+    // listener can never drift apart.
+    env: { ...process.env, PORT },
     stdio: ["ignore", "pipe", "pipe"],
     shell: process.platform === "win32",
   });
@@ -41,7 +69,13 @@ function run(label, command, args, cwd) {
       buffer += chunk.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
-      for (const line of lines) target.write(`${prefix}${line}\n`);
+      for (const line of lines) {
+        target.write(`${prefix}${line}\n`);
+        // Vite picks the next free port when the preferred one is taken, so the
+        // only trustworthy url is the one it reports. Announce that, rather
+        // than the port we asked for.
+        if (label === "web") announceUrl(line);
+      }
     });
   };
 
@@ -60,6 +94,37 @@ function run(label, command, args, cwd) {
   return child;
 }
 
+let announced = false;
+
+/**
+ * Reprints the address to open, using the port Vite actually bound.
+ * @param {string} line
+ */
+function announceUrl(line) {
+  if (announced) return;
+
+  const match = /Local:\s+(https?:\/\/\S+?)\/?\s*$/.exec(line.replace(/\x1b\[[0-9;]*m/g, ""));
+  if (!match) return;
+  announced = true;
+
+  const actualPort = new URL(match[1]).port;
+  const lan = lanAddress();
+  const bar = "─".repeat(58);
+
+  process.stdout.write(`
+  ${bar}
+
+    Open this:   https://localhost:${actualPort}
+${lan ? `    Or:          https://${lan}:${actualPort}\n` : ""}
+    Self-signed certificate — the browser warns once.
+    Click "Advanced", then "Proceed". That is what makes the
+    microphone work.
+
+  ${bar}
+
+`);
+}
+
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -70,13 +135,20 @@ function shutdown(code = 0) {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
+/** First non-internal IPv4 address, i.e. the one another machine can reach. */
+function lanAddress() {
+  for (const addresses of Object.values(networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family === "IPv4" && !address.internal) return address.address;
+    }
+  }
+  return null;
+}
+
 console.log(`
-  Minutely — local development
-
-    api  http://localhost:${process.env.PORT ?? 3001}
-    web  http://localhost:5173  (Vite picks the next free port if taken)
-
-  Press Ctrl+C to stop both.
+  Minutely — starting the API and the client.
+  The address to open is printed below once the client is ready.
+  API on port ${PORT}. Press Ctrl+C to stop everything.
 `);
 
 run("api", "npm", ["run", "dev", "--workspace", "server"], ROOT);

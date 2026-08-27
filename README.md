@@ -21,91 +21,50 @@ Phase 7 of 10 complete. Phase 8 (deploy) is ready to run — see [Deploying](#de
 ## Local setup
 
 ```bash
-nvm use
+nvm use          # Node 22
 npm install
-cp .env.example server/.env    # then paste your GROQ_API_KEY into it
+cp .env.example server/.env    # then put your GROQ_API_KEY in it
 npm run dev
 ```
 
-```bash
-npm run dev:all
+`npm run dev` starts everything and prints the address to open:
+
+```
+    Open this:   https://localhost:5173
+    Or:          https://192.168.21.112:5173
 ```
 
-- API on `http://localhost:3001`
-- Client on `http://127.0.0.1:5173` (Vite moves to the next free port if taken)
+Both work — the second from any machine on your network. Vite moves to the next
+free port if one is taken, and the address printed is always the real one.
 
-No cloud setup is needed: the database is a local SQLite file
-(`server/local.db`), created and migrated automatically on first boot. The only
-thing you must provide is `GROQ_API_KEY`.
+The certificate is self-signed, so the browser warns the first time: click
+**Advanced**, then **Proceed**. That is worth doing rather than falling back to
+http, because `getUserMedia` only works in a secure context — over plain http
+from anything but localhost, the browser blocks the microphone and recording
+silently never starts.
 
-### Reaching it from another machine
+The API runs on `PORT` from `server/.env` (3001 by default) and is proxied
+through that one address, so it needs no separate URL and no CORS setup.
 
-```bash
-npm run dev:host
-```
-
-Binds both halves to all interfaces and prints the network URL. In development
-the API also accepts private (RFC1918) LAN origins, so CORS and the WebSocket
-work from another machine without extra configuration. Public addresses are
-still rejected, and none of this relaxation applies in production.
-
-**But the microphone will not work that way** — see below. The *sample meeting*
-does, since it needs no microphone.
-
-### The microphone needs a secure context
-
-`getUserMedia` only works on **HTTPS or localhost**. Browsing to
-`http://<some-ip>:5173` — a remote dev box, another machine on your LAN — means
-the browser blocks the microphone outright and recording silently never starts.
-
-This is a browser rule, not something the app can opt out of. There are two
-ways round it:
-
-**Forward the port** (simplest, and the microphone works):
-
-```bash
-ssh -L 5174:127.0.0.1:5174 you@your-dev-box
-```
-
-Then open `http://localhost:5174` locally — that *is* a secure context. Only the
-client port needs forwarding; API and WebSocket traffic proxies through it.
-
-**Or serve over HTTPS**, if you genuinely need LAN access with a working
-microphone. Vite can do this with a self-signed certificate:
-
-```bash
-npm i -D -w client @vitejs/plugin-basic-ssl
-```
-
-then add the plugin to `client/vite.config.js` and run `npm run dev:host`. You
-will have to accept the browser's certificate warning once on each device.
-
-### Try it without a microphone
-
-The recording screen has a **Try a sample meeting** button. It plays a bundled
-100-second recording — several speakers, real pauses — through exactly the same
-path as a live recording: MediaRecorder, chunking, overlap, upload,
-transcription, turn detection, minutes. Nothing is stubbed, so what you watch is
-the real pipeline.
-
-Useful for seeing the whole thing work before trusting it with a real meeting,
-and as a demo-day fallback if live audio misbehaves. Source:
-[NASA, First Seven Astronauts Press Conference, 1959](https://archive.org/details/FirstSevenAstronautsPressConference)
-(public domain).
+No database setup: `server/local.db` is created and migrated on first boot. The
+only thing you must supply is `GROQ_API_KEY`.
 
 ### What to expect on a first run
 
-Audio is uploaded in ~20 second chunks, so **the first transcript line appears
-about 20 seconds after you start speaking**, not immediately. That is the
-chunking working as designed, not a hang — the UI says so while you wait.
+The first transcript line appears **about 20 seconds** after you start speaking,
+not immediately — audio is uploaded in ~20 second chunks. That is the chunking
+working as designed, not a hang, and the UI says so while you wait.
+
+**Try a sample meeting** on the recording screen runs a bundled 100-second
+multi-speaker recording through the identical pipeline with no microphone at
+all — the quickest way to see the whole thing work.
 
 ### Useful scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev:all` | Start the API **and** the client together (what you usually want) |
-| `npm run dev:host` | Same, but reachable from other machines on your network |
-| `npm run dev` | Sync version, then start just the server with file watching |
+| `npm run dev` | Start everything and print the address to open |
+| `npm run dev:server` | Just the API, with file watching |
 | `npm test` | Run all tests across client and server |
 | `npm run lint` | Lint everything |
 | `npm run sync-version` | Propagate `version.json` everywhere it is used |
