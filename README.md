@@ -27,15 +27,46 @@ cp .env.example server/.env    # then paste your GROQ_API_KEY into it
 npm run dev
 ```
 
-The server starts on `http://localhost:3001`. No cloud setup is needed for local
-development: the database is a local SQLite file (`server/local.db`), created and
-migrated automatically on first boot.
+```bash
+npm run dev:all
+```
+
+- API on `http://localhost:3001`
+- Client on `http://127.0.0.1:5173` (Vite moves to the next free port if taken)
+
+No cloud setup is needed: the database is a local SQLite file
+(`server/local.db`), created and migrated automatically on first boot. The only
+thing you must provide is `GROQ_API_KEY`.
+
+### The microphone needs a secure context
+
+`getUserMedia` only works on **HTTPS or localhost**. Browsing to
+`http://<some-ip>:5173` — a remote dev box, another machine on your LAN — means
+the browser blocks the microphone outright and recording silently never starts.
+
+If the code runs somewhere other than the machine with the microphone, forward
+the port instead of exposing it:
+
+```bash
+ssh -L 5173:127.0.0.1:5173 you@your-dev-box
+```
+
+Then open `http://localhost:5173` locally: that *is* a secure context, so the
+microphone works. Only the client port needs forwarding — API and WebSocket
+traffic is proxied through it.
+
+### What to expect on a first run
+
+Audio is uploaded in ~20 second chunks, so **the first transcript line appears
+about 20 seconds after you start speaking**, not immediately. That is the
+chunking working as designed, not a hang — the UI says so while you wait.
 
 ### Useful scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Sync version, then start the server with file watching |
+| `npm run dev:all` | Start the API **and** the client together (what you usually want) |
+| `npm run dev` | Sync version, then start just the server with file watching |
 | `npm test` | Run all tests across client and server |
 | `npm run lint` | Lint everything |
 | `npm run sync-version` | Propagate `version.json` everywhere it is used |

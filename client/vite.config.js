@@ -42,7 +42,12 @@ function requireBackendUrl() {
 export default defineConfig({
   plugins: [react(), requireBackendUrl()],
   server: {
-    port: 5173,
+    // Bind IPv4 explicitly. With no host set, Vite will happily bind IPv6-only
+    // when the IPv4 port is already taken — producing two dev servers on "the
+    // same" port that resolve differently depending on the client. Painful to
+    // debug, and this box already has another project on 5173.
+    host: process.env.CLIENT_HOST ?? "127.0.0.1",
+    port: Number(process.env.CLIENT_PORT ?? 5173),
     // Dev-only convenience: the client talks to the API and socket on the same
     // origin, so no CORS or URL juggling locally. Production points at the
     // deployed backend via VITE_API_URL / VITE_WS_URL.

@@ -20,7 +20,8 @@
     "build": "npm run build --workspace client",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
-    "migrate": "npm run migrate --workspace server"
+    "migrate": "npm run migrate --workspace server",
+    "dev:all": "npm run sync-version && node scripts/dev.mjs"
   },
   "devDependencies": {
     "eslint": "^9.15.0",
